@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd \\\"E:/AIW/Paper\\\" && python3 -c \\\"print('ok')\\\" 2>&1; python3 -c \\\"import sys; print(sys.version)\\\"\",\"description\":\"Confirm python3 alias works for plan commands\"}",
+  "error": "Exit code 49\nPython Python",
+  "timestamp": "2026-06-25T14:58:11.738Z",
+  "retry_count": 1
+}
