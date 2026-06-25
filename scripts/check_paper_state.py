@@ -50,3 +50,78 @@ def parse_stages(state_path: Path) -> list[dict]:
         stages.append(current)
 
     return stages
+
+
+ALLOWED_STATUSES = {
+    "not-started",
+    "in-progress",
+    "awaiting-review",
+    "awaiting-user",
+    "approved",
+    "escalated",
+}
+ALLOWED_VERDICTS = {"pass", "revise"}
+
+
+def validate_stage(stage: dict) -> list[str]:
+    errors: list[str] = []
+    stage_id = stage["id"]
+
+    status = stage["status"]
+    if status not in ALLOWED_STATUSES:
+        errors.append(f"{stage_id}: invalid status '{status}'")
+
+    current_round = None
+    max_round = None
+    round_value = stage["round"]
+    if round_value:
+        round_match = re.match(r"^(\d+)/(\d+)$", round_value)
+        if not round_match:
+            errors.append(f"{stage_id}: invalid round format '{round_value}', expected 'n/3'")
+        else:
+            current_round, max_round = int(round_match.group(1)), int(round_match.group(2))
+
+    verdict = stage["last-critic-verdict"]
+    if verdict is not None and verdict not in ALLOWED_VERDICTS:
+        errors.append(f"{stage_id}: invalid last-critic-verdict '{verdict}'")
+
+    if current_round is not None and max_round is not None:
+        if current_round >= max_round and status not in {"escalated", "approved"}:
+            errors.append(
+                f"{stage_id}: round {current_round}/{max_round} reached without "
+                f"status 'escalated' or 'approved' (got '{status}')"
+            )
+
+    return errors
+
+
+def validate_all(state_path: Path) -> dict[str, list[str]]:
+    report: dict[str, list[str]] = {}
+    for stage in parse_stages(state_path):
+        errors = validate_stage(stage)
+        if errors:
+            report[stage["id"]] = errors
+    return report
+
+
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Validate .omc/paper-state.md")
+    parser.add_argument("--state", required=True, type=Path)
+    args = parser.parse_args()
+
+    report = validate_all(args.state)
+    if not report:
+        print("paper-state.md is valid.")
+        return 0
+
+    print("paper-state.md validation errors:")
+    for stage_id, errors in report.items():
+        for error in errors:
+            print(f"  {error}")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

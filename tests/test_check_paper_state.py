@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.check_paper_state import parse_stages
+from scripts.check_paper_state import parse_stages, validate_all, validate_stage
 
 
 def write_state(tmp_dir: str, content: str) -> Path:
@@ -81,6 +81,96 @@ class TestParseStages(unittest.TestCase):
             stages = parse_stages(state_path)
             self.assertEqual(stages[0]["status"], "not-started")
             self.assertEqual(stages[0]["last-critic-issues"], [])
+
+
+class TestValidateStage(unittest.TestCase):
+    def test_valid_stage_has_no_errors(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "approved",
+            "round": "2/3",
+            "last-critic-verdict": "pass",
+            "last-critic-issues": [],
+        }
+        self.assertEqual(validate_stage(stage), [])
+
+    def test_invalid_status_is_flagged(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "done",
+            "round": "0/3",
+            "last-critic-verdict": None,
+            "last-critic-issues": [],
+        }
+        errors = validate_stage(stage)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("invalid status", errors[0])
+
+    def test_invalid_round_format_is_flagged(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "in-progress",
+            "round": "two of three",
+            "last-critic-verdict": None,
+            "last-critic-issues": [],
+        }
+        errors = validate_stage(stage)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("invalid round format", errors[0])
+
+    def test_round_exceeded_without_escalation_is_flagged(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "in-progress",
+            "round": "3/3",
+            "last-critic-verdict": "revise",
+            "last-critic-issues": ["still unclear"],
+        }
+        errors = validate_stage(stage)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("reached without status 'escalated' or 'approved'", errors[0])
+
+    def test_round_exceeded_with_escalated_status_passes(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "escalated",
+            "round": "3/3",
+            "last-critic-verdict": "revise",
+            "last-critic-issues": ["still unclear"],
+        }
+        self.assertEqual(validate_stage(stage), [])
+
+    def test_invalid_verdict_is_flagged(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "in-progress",
+            "round": "1/3",
+            "last-critic-verdict": "looks great",
+            "last-critic-issues": [],
+        }
+        errors = validate_stage(stage)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("invalid last-critic-verdict", errors[0])
+
+
+class TestValidateAll(unittest.TestCase):
+    def test_returns_only_stages_with_errors(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                "## Stage: lit-review\n"
+                "status: approved\n"
+                "round: 1/3\n"
+                "last-critic-verdict: pass\n"
+                "last-critic-issues:\n\n"
+                "## Stage: novelty-check\n"
+                "status: bogus\n"
+                "round: 0/3\n"
+                "last-critic-verdict:\n"
+                "last-critic-issues:\n",
+            )
+            report = validate_all(state_path)
+            self.assertEqual(list(report.keys()), ["novelty-check"])
 
 
 if __name__ == "__main__":
