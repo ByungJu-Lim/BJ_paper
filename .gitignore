@@ -1,2 +1,4 @@
 .omc/sessions/
 .omc/state/
+.omc/project-memory.json
+__pycache__/
