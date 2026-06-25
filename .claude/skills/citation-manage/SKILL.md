@@ -19,3 +19,4 @@ A citation may enter `refs/references.bib` **only if** its key already exists in
 3. For every key the script reports as unverified: do **not** add it to `refs/references.bib`. Instead, record it under `rejected-citations` in the `citation-manage` stage of `.omc/paper-state.md` with the reason `"not in retrieved-sources.json"`, and tell the user — either run `lit-review` to register the real source, or remove the citation from the draft.
 4. Update `verified-sources` in `.omc/paper-state.md` to the count of keys now in `refs/references.bib`.
 5. Stop for the **citations-finalized user gate** before treating this stage as done.
+6. Delegate review of this stage's outcome to `verifier`, per the `paper-supervise` loop.

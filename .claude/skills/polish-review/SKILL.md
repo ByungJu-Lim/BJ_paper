@@ -18,6 +18,7 @@ Additionally check, specific to a final pass: terminology consistency across sec
 
 ## Procedure
 
-1. Run `python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md` one more time — citations must still be clean after any late edits.
-2. Produce a short review report listing any remaining issues per section.
-3. Stop for the **final-polish user gate** — this is the last of the 4 fixed gates; do not mark the paper complete without explicit user sign-off.
+1. Delegate to `writer`: if `docs/sections/06-conclusion.md` has not yet been drafted, write it now, summarizing the approved Results/Discussion sections and restating the paper's contribution from `docs/notes/novelty-matrix.md`.
+2. Run `python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md` one more time — citations must still be clean after any late edits.
+3. Produce a short review report listing any remaining issues per section.
+4. Stop for the **final-polish user gate** — this is the last of the 4 fixed gates; do not mark the paper complete without explicit user sign-off.
