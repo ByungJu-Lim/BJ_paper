@@ -32,6 +32,26 @@ class TestExtractRegistryKeys(unittest.TestCase):
             registry_path.write_text("[]", encoding="utf-8")
             self.assertEqual(extract_registry_keys(registry_path), set())
 
+    def test_duplicate_keys_are_rejected(self):
+        with TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "retrieved-sources.json"
+            registry_path.write_text(
+                json.dumps([
+                    {"key": "same", "title": "A", "url": "https://example.com/a", "retrieved_at": "2026-06-20"},
+                    {"key": "same", "title": "B", "url": "https://example.com/b", "retrieved_at": "2026-06-21"},
+                ]),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "duplicate registry key"):
+                extract_registry_keys(registry_path)
+
+    def test_invalid_registry_shape_is_rejected(self):
+        with TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "retrieved-sources.json"
+            registry_path.write_text('{"key": "not-a-list"}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "JSON array"):
+                extract_registry_keys(registry_path)
+
 
 class TestExtractBibtexKeys(unittest.TestCase):
     def test_reads_keys_from_multiple_entry_types(self):
@@ -72,6 +92,18 @@ class TestExtractCitationKeysFromMarkdown(unittest.TestCase):
             md_path = Path(tmp) / "section.md"
             md_path.write_text("See [Figure 1] for the setup.", encoding="utf-8")
             self.assertEqual(extract_citation_keys_from_markdown(md_path), set())
+
+    def test_locator_and_suppress_author_citations(self):
+        with TemporaryDirectory() as tmp:
+            md_path = Path(tmp) / "section.md"
+            md_path.write_text(
+                "Evidence [see @smith2021boiler, pp. 3-4; -@lee2022process].",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                extract_citation_keys_from_markdown(md_path),
+                {"smith2021boiler", "lee2022process"},
+            )
 
 
 class TestFindUnverifiedCitations(unittest.TestCase):

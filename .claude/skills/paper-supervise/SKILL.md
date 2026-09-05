@@ -16,9 +16,10 @@ description: Orchestrates the paper-writing pipeline via .omc/paper-state.md —
 
 ## On invocation
 
-1. Run `python scripts/check_paper_state.py --state .omc/paper-state.md`. If it reports errors, stop and show them to the user before doing anything else — the state file is corrupted and must be fixed by hand first.
-2. Read `.omc/paper-state.md` and find the first stage (in the order above) whose `status` is not `approved` (an `escalated` stage surfaces here too — the user must resolve it before the pipeline continues).
-3. Report that stage and its current `status`/`round` to the user, then proceed per the loop below.
+1. Run `python scripts/check_paper_state.py --state .omc/paper-state.md`. If it reports errors, stop and show them to the user before doing anything else. Repair only deterministic format/order errors; never guess research decisions or approvals.
+2. Before completing `lit-review` or starting `citation-manage`, run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online`. Stop and quarantine any source that fails metadata validation.
+3. Read `.omc/paper-state.md` and find the first stage (in the order above) whose `status` is not `approved` (an `escalated` stage surfaces here too — the user must resolve it before the pipeline continues).
+4. Report that stage and its current `status`/`round` to the user, then proceed per the loop below.
 
 ## Generate-then-review loop (per stage)
 

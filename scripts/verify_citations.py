@@ -6,7 +6,20 @@ from pathlib import Path
 
 def extract_registry_keys(registry_path: Path) -> set[str]:
     data = json.loads(registry_path.read_text(encoding="utf-8"))
-    return {entry["key"] for entry in data}
+    if not isinstance(data, list):
+        raise ValueError("retrieved-sources registry must be a JSON array")
+
+    keys: set[str] = set()
+    for index, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            raise ValueError(f"registry entry {index} must be a JSON object")
+        key = entry.get("key")
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError(f"registry entry {index} has no valid key")
+        if key in keys:
+            raise ValueError(f"duplicate registry key: {key}")
+        keys.add(key)
+    return keys
 
 
 def extract_bibtex_keys(bib_path: Path) -> set[str]:
@@ -20,10 +33,8 @@ def extract_citation_keys_from_markdown(md_path: Path) -> set[str]:
     for bracket_contents in re.findall(r"\[([^\]]+)\]", text):
         if "@" not in bracket_contents:
             continue
-        for token in bracket_contents.split(";"):
-            token = token.strip()
-            if token.startswith("@"):
-                keys.add(token[1:].strip())
+        for match in re.finditer(r"(?:^|[\s;])-?@([^\s,;\]]+)", bracket_contents):
+            keys.add(match.group(1))
     return keys
 
 

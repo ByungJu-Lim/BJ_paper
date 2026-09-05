@@ -7,6 +7,16 @@ FIELD_RE = re.compile(r"^(?P<key>[\w-]+):\s*(?P<value>.*)$")
 ISSUE_RE = re.compile(r'^\s*-\s*"?(?P<issue>.*?)"?\s*$')
 
 TRACKED_SCALAR_FIELDS = ("status", "round", "last-critic-verdict")
+REQUIRED_STAGE_IDS = (
+    "lit-review",
+    "novelty-check",
+    "outline-draft",
+    "results-discussion",
+    "code-experiment",
+    "figures-tables",
+    "citation-manage",
+    "polish-review",
+)
 
 
 def parse_stages(state_path: Path) -> list[dict]:
@@ -86,7 +96,17 @@ def validate_stage(stage: dict) -> list[str]:
         errors.append(f"{stage_id}: invalid last-critic-verdict '{verdict}'")
 
     if current_round is not None and max_round is not None:
-        if current_round >= max_round and status not in {"escalated", "approved"}:
+        if max_round != 3:
+            errors.append(f"{stage_id}: round denominator must be 3 (got '{max_round}')")
+        if not 0 <= current_round <= max_round:
+            errors.append(f"{stage_id}: round must be between 0 and {max_round}")
+        if status == "not-started" and current_round != 0:
+            errors.append(f"{stage_id}: status 'not-started' requires round 0/3")
+        if (
+            current_round >= max_round
+            and verdict == "revise"
+            and status not in {"escalated", "approved"}
+        ):
             errors.append(
                 f"{stage_id}: round {current_round}/{max_round} reached without "
                 f"status 'escalated' or 'approved' (got '{status}')"
@@ -97,10 +117,31 @@ def validate_stage(stage: dict) -> list[str]:
 
 def validate_all(state_path: Path) -> dict[str, list[str]]:
     report: dict[str, list[str]] = {}
-    for stage in parse_stages(state_path):
+    stages = parse_stages(state_path)
+    stage_ids = [stage["id"] for stage in stages]
+    workflow_errors: list[str] = []
+
+    duplicates = sorted({stage_id for stage_id in stage_ids if stage_ids.count(stage_id) > 1})
+    missing = [stage_id for stage_id in REQUIRED_STAGE_IDS if stage_id not in stage_ids]
+    unknown = [stage_id for stage_id in stage_ids if stage_id not in REQUIRED_STAGE_IDS]
+    known_in_file = [stage_id for stage_id in stage_ids if stage_id in REQUIRED_STAGE_IDS]
+    expected_known_order = [stage_id for stage_id in REQUIRED_STAGE_IDS if stage_id in stage_ids]
+
+    if duplicates:
+        workflow_errors.append(f"duplicate stages: {', '.join(duplicates)}")
+    if missing:
+        workflow_errors.append(f"missing stages: {', '.join(missing)}")
+    if unknown:
+        workflow_errors.append(f"unknown stages: {', '.join(unknown)}")
+    if known_in_file != expected_known_order:
+        workflow_errors.append("stages are not in the required workflow order")
+    if workflow_errors:
+        report["__workflow__"] = workflow_errors
+
+    for stage in stages:
         errors = validate_stage(stage)
         if errors:
-            report[stage["id"]] = errors
+            report.setdefault(stage["id"], []).extend(errors)
     return report
 
 

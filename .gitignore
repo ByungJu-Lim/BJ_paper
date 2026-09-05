@@ -2,3 +2,9 @@
 .omc/state/
 .omc/project-memory.json
 __pycache__/
+*.py[cod]
+.obsidian/
+.ssh/
+.env
+.env.*
+!.env.example

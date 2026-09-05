@@ -152,6 +152,26 @@ class TestValidateStage(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("invalid last-critic-verdict", errors[0])
 
+    def test_round_denominator_must_be_three(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "in-progress",
+            "round": "1/4",
+            "last-critic-verdict": None,
+            "last-critic-issues": [],
+        }
+        self.assertTrue(any("denominator" in error for error in validate_stage(stage)))
+
+    def test_not_started_stage_must_be_round_zero(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "not-started",
+            "round": "1/3",
+            "last-critic-verdict": None,
+            "last-critic-issues": [],
+        }
+        self.assertTrue(any("not-started" in error for error in validate_stage(stage)))
+
 
 class TestValidateAll(unittest.TestCase):
     def test_returns_only_stages_with_errors(self):
@@ -167,10 +187,32 @@ class TestValidateAll(unittest.TestCase):
                 "status: bogus\n"
                 "round: 0/3\n"
                 "last-critic-verdict:\n"
-                "last-critic-issues:\n",
+                "last-critic-issues:\n\n"
+                "## Stage: outline-draft\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: results-discussion\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: code-experiment\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: figures-tables\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: citation-manage\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: polish-review\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n",
             )
             report = validate_all(state_path)
             self.assertEqual(list(report.keys()), ["novelty-check"])
+
+    def test_missing_duplicate_and_out_of_order_stages_are_flagged(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                "## Stage: novelty-check\nstatus: not-started\nround: 0/3\n"
+                "last-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: lit-review\nstatus: not-started\nround: 0/3\n"
+                "last-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: lit-review\nstatus: not-started\nround: 0/3\n"
+                "last-critic-verdict:\nlast-critic-issues:\n",
+            )
+            errors = validate_all(state_path)["__workflow__"]
+            self.assertTrue(any("duplicate" in error for error in errors))
+            self.assertTrue(any("missing" in error for error in errors))
+            self.assertTrue(any("order" in error for error in errors))
 
 
 if __name__ == "__main__":
