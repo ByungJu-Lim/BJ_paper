@@ -7,6 +7,7 @@
 1. 저장소 설정에서 **Template Repository**를 활성화합니다. 이 설정은 원본 템플릿에서 한 번만 수행합니다.
 2. 새 논문마다 **Use this template**을 선택해 독립 저장소를 만듭니다. 새 저장소는 서브모듈이나 심볼릭 링크 없이 단독으로 동작합니다.
 3. 새 저장소를 복제하고 `CLAUDE.md` 상단의 가제, 목표 학술지/학회, 분야, 작성 언어를 입력합니다.
+   원격을 둘(Gitea + GitHub) 운영한다면 `git config core.hooksPath .githooks`를 함께 실행하세요. 아래 "원격 두 곳 운영" 참고.
 4. Claude Code에 `paper-supervise` 스킬 실행을 요청합니다. 이 스킬은 `.omc/paper-state.md`를 검사하고 시작할 단계를 안내합니다.
 
 ## 스킬
@@ -43,6 +44,19 @@ python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json 
 - `check_submissions.py`는 투고 이력을 검사합니다. 두 저널에 동시 투고된 상태, 심사평을 반영하지 않고 연 다음 투고, 게재 확정 이후의 추가 투고, 어긋난 날짜를 잡아냅니다.
 
 투고 관리는 `submissions/`에서 이뤄집니다. 본문 사본을 두지 않고 git 태그로 제출본을 고정하므로, 어느 판본이 어느 저널에 갔는지 항상 복원할 수 있습니다. 자세한 규칙은 `submissions/README.md`를 참고하세요.
+
+## 원격 두 곳 운영 (선택)
+
+Gitea를 원본으로 두고 GitHub를 push mirror로 미러링하는 구성에서는, 미러가 `.github/workflows/` 변경을 절대 옮기지 못합니다. GitHub가 `workflow` 스코프 없는 토큰의 워크플로 수정을 거부하기 때문입니다.
+
+미러 토큰에 그 스코프를 주면 편하지만, 토큰은 Gitea 서버에 저장되므로 그 서버가 뚫렸을 때 공개 저장소의 CI를 고쳐 임의 코드를 실행할 권한까지 넘어갑니다. 그래서 스코프를 주지 않고, 대신 `.githooks/pre-push`가 해당 커밋만 로컬 자격증명으로 GitHub에 직접 밀어줍니다. GitHub가 먼저 받으므로 뒤이어 도는 미러는 거부할 것이 남지 않습니다.
+
+```bash
+git config core.hooksPath .githooks                 # 클론마다 한 번
+PAPER_HOOK_DRY_RUN=1 git push origin main           # 무엇을 할지만 확인
+```
+
+`github` 원격이 없으면 훅은 아무 일도 하지 않습니다.
 
 ## 안전성과 설계 원칙
 

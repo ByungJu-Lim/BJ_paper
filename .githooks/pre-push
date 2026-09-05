@@ -1,0 +1,44 @@
+#!/bin/sh
+# Carry .github/workflows/ changes to GitHub directly.
+#
+# The Gitea push mirror authenticates with a GitHub token that deliberately
+# lacks the `workflow` scope, so GitHub rejects any mirrored push that touches
+# .github/workflows/. Granting that scope would let anyone who reaches the NAS
+# rewrite the public repo's CI, so instead this hook pushes those commits from
+# here, where credentials are managed locally. GitHub then already has them and
+# the mirror has nothing left to reject.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Preview without pushing: PAPER_HOOK_DRY_RUN=1 git push origin main
+
+remote_name="$1"
+zero=0000000000000000000000000000000000000000
+
+# Only react to pushes at the primary remote; this also stops the inner
+# `git push github` below from re-entering the hook.
+[ "$remote_name" = "origin" ] || exit 0
+git remote get-url github >/dev/null 2>&1 || exit 0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue   # branch deletion
+
+    if [ "$remote_sha" = "$zero" ]; then
+        touched=new-branch                    # no baseline to diff against
+    else
+        touched=$(git diff --name-only "$remote_sha..$local_sha" -- .github/workflows/)
+    fi
+    [ -n "$touched" ] || continue
+
+    echo "pre-push: .github/workflows/ changed - the Gitea mirror cannot carry this."
+    if [ -n "$PAPER_HOOK_DRY_RUN" ]; then
+        echo "pre-push: [dry run] would run: git push github $local_ref:$remote_ref"
+        continue
+    fi
+
+    echo "pre-push: pushing $local_ref to GitHub directly."
+    if ! git push github "$local_ref:$remote_ref"; then
+        echo "pre-push: direct GitHub push failed - run 'git push github main' yourself." >&2
+    fi
+done
+
+exit 0
