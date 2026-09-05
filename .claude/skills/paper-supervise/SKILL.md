@@ -13,13 +13,17 @@ description: Orchestrates the paper-writing pipeline via .omc/paper-state.md —
 4. `results-discussion`, `code-experiment`, `figures-tables` (any order, once `code/` has produced `data/processed/`)
 5. `citation-manage`
 6. `polish-review`
+7. `submission-manage` — venue selection, submission, and every editorial decision after it
+
+Stages 1-6 produce the manuscript; stage 7 repeats for as long as the paper is in review. A rejection sends specific stages back to `in-progress`, it does not restart the pipeline.
 
 ## On invocation
 
 1. Run `python scripts/check_paper_state.py --state .omc/paper-state.md`. If it reports errors, stop and show them to the user before doing anything else. Repair only deterministic format/order errors; never guess research decisions or approvals.
 2. Before completing `lit-review` or starting `citation-manage`, run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online`. This resolves each DOI (Crossref, falling back to DataCite for arXiv and Zenodo), matches titles, and screens against Crossref's Retraction Watch feed. Stop and quarantine any source that fails — a retracted source is a hard stop, not a warning.
-3. Read `.omc/paper-state.md` and find the first stage (in the order above) whose `status` is not `approved` (an `escalated` stage surfaces here too — the user must resolve it before the pipeline continues).
-4. Report that stage and its current `status`/`round` to the user, then proceed per the loop below.
+3. Once `polish-review` is `approved`, also run `python scripts/check_submissions.py --log submissions/submission-log.md` and report the open attempt's venue and status. If an attempt is `submitted` or `under-review`, the paper is with a venue and the only valid work is answering a decision — do not open a new attempt.
+4. Read `.omc/paper-state.md` and find the first stage (in the order above) whose `status` is not `approved` (an `escalated` stage surfaces here too — the user must resolve it before the pipeline continues).
+5. Report that stage and its current `status`/`round` to the user, then proceed per the loop below.
 
 ## Generate-then-review loop (per stage)
 
@@ -42,3 +46,5 @@ Regardless of critic verdict, always stop for explicit user sign-off at:
 - each section draft complete (`outline-draft` / `results-discussion` stages)
 - citations finalized (`citation-manage` stage, before any `refs/references.bib` edit is treated as final)
 - final polish (`polish-review` stage)
+- submission (`submission-manage`, before the manuscript goes to a venue — the user submits, never the agent)
+- venue change (`submission-manage`, after a rejection — the user picks the next venue)

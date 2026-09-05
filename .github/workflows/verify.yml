@@ -21,6 +21,8 @@ jobs:
         run: python scripts/check_paper_state.py --state .omc/paper-state.md
       - name: Validate source registry structure
         run: python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json
+      - name: Validate submission ledger
+        run: python scripts/check_submissions.py --log submissions/submission-log.md
       - name: Verify citations and bibliography
         run: |
           python scripts/verify_citations.py \

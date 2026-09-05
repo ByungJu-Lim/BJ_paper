@@ -25,4 +25,5 @@ Additionally check, specific to a final pass: terminology consistency across sec
    ```
    This covers the manual "every in-text key is also in `refs/references.bib`" check above; do not eyeball it.
 3. Produce a short review report listing any remaining issues per section.
-4. Stop for the **final-polish user gate** — this is the last of the 4 fixed gates; do not mark the paper complete without explicit user sign-off.
+4. Stop for the **final-polish user gate** — do not mark the paper complete without explicit user sign-off.
+5. Once approved, hand off to `submission-manage`. "Done drafting" is not "published": the paper still has to reach a venue, and a rejection routes specific sections back through the stages above.
