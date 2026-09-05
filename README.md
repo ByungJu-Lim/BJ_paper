@@ -41,7 +41,7 @@ python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json 
 - `verify_source_registry.py`는 출처의 필수 필드, URL, 날짜(미래 날짜 거부), 유형, DOI를 검사합니다. `--online`은 DOI를 Crossref로 해석하고, arXiv·Zenodo처럼 DataCite에 등록된 DOI는 자동으로 DataCite로 넘어갑니다. 이어서 제목을 대조하고 Crossref의 Retraction Watch 피드로 철회 여부를 확인합니다.
 - `verify_citations.py`는 세 가지 불변식을 강제합니다. (A) 본문 인용 키가 모두 레지스트리에 있을 것, (B) BibTeX 항목이 모두 레지스트리에 있을 것, (C) 본문 인용 키가 모두 BibTeX에 있을 것. B가 없으면 `.bib`에 직접 써넣은 조작 항목을 아무도 잡지 못합니다.
 - `check_paper_state.py`는 단계 누락·중복·순서, 상태값, 검토 횟수 제한을 확인합니다.
-- `check_submissions.py`는 투고 이력을 검사합니다. 두 저널에 동시 투고된 상태, 심사평을 반영하지 않고 연 다음 투고, 게재 확정 이후의 추가 투고, 어긋난 날짜를 잡아냅니다.
+- `check_submissions.py`는 투고 이력과 투고처 폴더를 검사합니다. 두 저널에 동시 투고된 상태, 심사평을 반영하지 않고 연 다음 투고, 게재 확정 이후의 추가 투고, 어긋난 날짜를 잡아냅니다. 또한 투고처별 `figure-profile.json`(형식·해상도·컬럼 폭)을 검증하고, `main_figures`에 적힌 그림이 선언한 형식으로 실제 존재하는지 확인합니다 — 저널을 옮기며 그림을 다시 렌더링하지 않은 경우가 여기서 걸립니다.
 
 투고 관리는 `submissions/`에서 이뤄집니다. 본문 사본을 두지 않고 git 태그로 제출본을 고정하므로, 어느 판본이 어느 저널에 갔는지 항상 복원할 수 있습니다. 자세한 규칙은 `submissions/README.md`를 참고하세요.
 

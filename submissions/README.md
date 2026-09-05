@@ -21,10 +21,28 @@ submissions/
 ├── _template/                 # copy this for each new attempt
 └── NN-<venue-slug>/
     ├── venue.md               # limits, formatting, scope notes from author guidelines
+    ├── figure-profile.json    # render settings this venue demands
+    ├── figures/               # figures rendered for this venue - the exact files uploaded
     ├── cover-letter.md
     ├── reviews/               # reviewer reports as received, verbatim
     └── response-to-reviewers.md
 ```
+
+## Figures
+
+Figures **are** per-venue, unlike the manuscript. Venues differ on format (EPS vs
+TIFF), resolution, column width, colour policy, and minimum font size, and a page
+limit can force panels to be merged or a figure moved to supplementary.
+
+That does not make them hand-maintained copies. Figures are generated from
+`data/processed/` by the plotting script in `code/`, and what changes per venue is
+the *render profile*, not the figure itself. `figure-profile.json` holds that
+profile and the script reads it; `figures/` holds the output.
+
+So: never hand-edit a file in `figures/`, and never copy renders from a previous
+attempt. Change the profile or the script and re-render. `check_submissions.py`
+fails when a figure listed in `main_figures` is missing in the declared format,
+which is what catches a venue change where the figures were never regenerated.
 
 ## Rules
 

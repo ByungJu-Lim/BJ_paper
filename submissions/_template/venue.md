@@ -5,7 +5,7 @@
 - **Word/page limit:** <limit, and where it is counted from>
 - **Reference style:** <e.g. Elsevier numbered, IEEE>
 - **Reference limit:** <if any>
-- **Figure requirements:** <format, resolution, colour policy>
+- **Figure requirements:** <format, resolution, colour policy> — transcribe these into `figure-profile.json`, which is what the render script actually reads
 - **Structured abstract:** <required sections, or "no">
 - **Required statements:** <data availability, CRediT, ethics, conflict of interest>
 - **Preprint policy:** <whether an arXiv preprint is allowed>

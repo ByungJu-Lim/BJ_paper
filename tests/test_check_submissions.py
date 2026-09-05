@@ -1,9 +1,16 @@
+import json
 import unittest
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.check_submissions import parse_attempts, validate_attempt, validate_ledger
+from scripts.check_submissions import (
+    parse_attempts,
+    validate_attempt,
+    validate_attempt_folder,
+    validate_figure_profile,
+    validate_ledger,
+)
 
 TODAY = date(2026, 9, 5)
 
@@ -231,6 +238,99 @@ class TestValidateLedger(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = write_log(tmp)
             self.assertEqual(validate_ledger(path, today=TODAY), {})
+
+
+def valid_profile(**overrides) -> dict:
+    profile = {
+        "format": "tiff",
+        "dpi": 300,
+        "column_width_mm": {"single": 90, "double": 190},
+        "main_figures": ["fig1", "fig2"],
+        "supplementary_figures": [],
+    }
+    profile.update(overrides)
+    return profile
+
+
+class TestValidateFigureProfile(unittest.TestCase):
+    def test_valid_profile_has_no_errors(self):
+        self.assertEqual(validate_figure_profile("01-x", valid_profile()), [])
+
+    def test_vector_format_does_not_require_dpi(self):
+        profile = valid_profile(format="eps")
+        del profile["dpi"]
+        self.assertEqual(validate_figure_profile("01-x", profile), [])
+
+    def test_raster_below_300_dpi_is_flagged(self):
+        errors = validate_figure_profile("01-x", valid_profile(dpi=150))
+        self.assertTrue(any("below the 300" in error for error in errors))
+
+    def test_unknown_format_is_flagged(self):
+        errors = validate_figure_profile("01-x", valid_profile(format="bmp"))
+        self.assertTrue(any("format must be one of" in error for error in errors))
+
+    def test_negative_column_width_is_flagged(self):
+        errors = validate_figure_profile("01-x", valid_profile(column_width_mm={"single": -5}))
+        self.assertTrue(any("positive number" in error for error in errors))
+
+    def test_figure_in_both_main_and_supplementary_is_flagged(self):
+        errors = validate_figure_profile(
+            "01-x", valid_profile(supplementary_figures=["fig2", "figS1"])
+        )
+        self.assertTrue(any("both main and supplementary" in error for error in errors))
+
+
+class TestValidateAttemptFolder(unittest.TestCase):
+    def build_folder(self, tmp: str, attempt_id: str, profile: dict | None, figures: tuple[str, ...]):
+        folder = Path(tmp) / attempt_id
+        (folder / "figures").mkdir(parents=True)
+        (folder / "venue.md").write_text("# Venue\n", encoding="utf-8")
+        if profile is not None:
+            (folder / "figure-profile.json").write_text(json.dumps(profile), encoding="utf-8")
+        for name in figures:
+            (folder / "figures" / name).write_bytes(b"")
+        return Path(tmp)
+
+    def attempt(self, status: str = "submitted") -> dict:
+        with TemporaryDirectory() as tmp:
+            return parse_attempts(write_log(tmp, attempt_block("01-applied-energy", status=status)))[0]
+
+    def test_folder_with_profile_and_rendered_figures_passes(self):
+        with TemporaryDirectory() as tmp:
+            root = self.build_folder(
+                tmp, "01-applied-energy", valid_profile(), ("fig1.tiff", "fig2.tiff")
+            )
+            self.assertEqual(validate_attempt_folder(self.attempt(), root), [])
+
+    def test_missing_rendered_figure_is_flagged(self):
+        """The profile promises fig2; the folder does not hold it."""
+        with TemporaryDirectory() as tmp:
+            root = self.build_folder(tmp, "01-applied-energy", valid_profile(), ("fig1.tiff",))
+            errors = validate_attempt_folder(self.attempt(), root)
+            self.assertTrue(any("fig2.tiff" in error for error in errors))
+
+    def test_missing_profile_is_flagged(self):
+        with TemporaryDirectory() as tmp:
+            root = self.build_folder(tmp, "01-applied-energy", None, ())
+            errors = validate_attempt_folder(self.attempt(), root)
+            self.assertTrue(any("figure-profile.json" in error for error in errors))
+
+    def test_preparing_attempt_is_not_checked_yet(self):
+        with TemporaryDirectory() as tmp:
+            root = self.build_folder(tmp, "01-applied-energy", None, ())
+            self.assertEqual(validate_attempt_folder(self.attempt(status="preparing"), root), [])
+
+    def test_venue_change_needs_its_own_render(self):
+        """Attempt 02 at a vector-format venue cannot reuse attempt 01's TIFFs."""
+        with TemporaryDirectory() as tmp:
+            root = self.build_folder(
+                tmp, "02-energy-conversion", valid_profile(format="eps"), ("fig1.tiff", "fig2.tiff")
+            )
+            attempt = parse_attempts(
+                write_log(tmp, attempt_block("02-energy-conversion", status="submitted"))
+            )[0]
+            errors = validate_attempt_folder(attempt, root)
+            self.assertTrue(any("fig1.eps" in error for error in errors))
 
 
 if __name__ == "__main__":

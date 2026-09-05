@@ -9,6 +9,7 @@ once a manuscript has been in flight for months, so they are checked here:
   throws away the only feedback the paper has received
 """
 import argparse
+import json
 import re
 from datetime import date
 from pathlib import Path
@@ -43,6 +44,15 @@ ALLOWED_STATUSES = (
 SUBMITTED_STATUSES = ALLOWED_STATUSES - PREPARING_STATUSES
 DECIDED_STATUSES = CLOSED_NEGATIVE_STATUSES | {ACCEPTED_STATUS}
 BOOLEAN_VALUES = {"yes", "no"}
+
+# Figures are re-rendered per venue, so each attempt folder carries a render profile.
+FIGURE_PROFILE_NAME = "figure-profile.json"
+VENUE_NOTES_NAME = "venue.md"
+FIGURES_DIR_NAME = "figures"
+VECTOR_FIGURE_FORMATS = {"eps", "pdf", "svg"}
+RASTER_FIGURE_FORMATS = {"tiff", "tif", "png", "jpg", "jpeg"}
+ALLOWED_FIGURE_FORMATS = VECTOR_FIGURE_FORMATS | RASTER_FIGURE_FORMATS
+MIN_RASTER_DPI = 300
 
 
 def parse_attempts(log_path: Path) -> list[dict]:
@@ -147,7 +157,103 @@ def validate_attempt(attempt: dict, today: date | None = None) -> list[str]:
     return errors
 
 
-def validate_ledger(log_path: Path, today: date | None = None) -> dict[str, list[str]]:
+def validate_figure_profile(label: str, profile: dict) -> list[str]:
+    """A venue's figure render settings, checked against what journals actually demand."""
+    errors: list[str] = []
+
+    fmt = profile.get("format")
+    if not isinstance(fmt, str) or fmt.lower() not in ALLOWED_FIGURE_FORMATS:
+        errors.append(f"{label}: format must be one of {', '.join(sorted(ALLOWED_FIGURE_FORMATS))}")
+        fmt = None
+    else:
+        fmt = fmt.lower()
+
+    dpi = profile.get("dpi")
+    if fmt in RASTER_FIGURE_FORMATS:
+        if not isinstance(dpi, int) or isinstance(dpi, bool):
+            errors.append(f"{label}: dpi must be an integer for raster format '{fmt}'")
+        elif dpi < MIN_RASTER_DPI:
+            errors.append(
+                f"{label}: dpi {dpi} is below the {MIN_RASTER_DPI} that most venues require"
+            )
+
+    widths = profile.get("column_width_mm")
+    if not isinstance(widths, dict) or not widths:
+        errors.append(f"{label}: column_width_mm must map column names to widths in mm")
+    else:
+        for name, value in widths.items():
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+                errors.append(f"{label}: column_width_mm['{name}'] must be a positive number")
+
+    main = profile.get("main_figures")
+    if not isinstance(main, list) or not all(isinstance(item, str) and item for item in main):
+        errors.append(f"{label}: main_figures must be a list of figure names")
+        main = []
+
+    supplementary = profile.get("supplementary_figures", [])
+    if not isinstance(supplementary, list) or not all(
+        isinstance(item, str) and item for item in supplementary
+    ):
+        errors.append(f"{label}: supplementary_figures must be a list of figure names")
+        supplementary = []
+
+    overlap = sorted(set(main) & set(supplementary))
+    if overlap:
+        errors.append(f"{label}: {', '.join(overlap)} listed as both main and supplementary")
+
+    return errors
+
+
+def validate_attempt_folder(attempt: dict, attempts_dir: Path) -> list[str]:
+    """Once an attempt has left 'preparing', its venue folder must hold what was sent."""
+    errors: list[str] = []
+    attempt_id = attempt["id"]
+    if attempt["status"] not in SUBMITTED_STATUSES:
+        return errors
+
+    folder = attempts_dir / attempt_id
+    if not folder.is_dir():
+        return [f"{attempt_id}: no folder at {folder}"]
+
+    if not (folder / VENUE_NOTES_NAME).is_file():
+        errors.append(f"{attempt_id}: missing {VENUE_NOTES_NAME}")
+
+    profile_path = folder / FIGURE_PROFILE_NAME
+    if not profile_path.is_file():
+        return errors + [f"{attempt_id}: missing {FIGURE_PROFILE_NAME}"]
+
+    try:
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return errors + [f"{attempt_id}: {FIGURE_PROFILE_NAME} cannot be read: {exc}"]
+
+    if not isinstance(profile, dict):
+        return errors + [f"{attempt_id}: {FIGURE_PROFILE_NAME} must be a JSON object"]
+
+    errors.extend(validate_figure_profile(attempt_id, profile))
+
+    fmt = profile.get("format")
+    figures = profile.get("main_figures")
+    if not isinstance(fmt, str) or not isinstance(figures, list):
+        return errors
+
+    figures_dir = folder / FIGURES_DIR_NAME
+    missing = [
+        name
+        for name in figures
+        if isinstance(name, str) and not (figures_dir / f"{name}.{fmt.lower()}").is_file()
+    ]
+    if missing:
+        errors.append(
+            f"{attempt_id}: rendered figures missing from {figures_dir}: "
+            f"{', '.join(f'{name}.{fmt.lower()}' for name in missing)}"
+        )
+    return errors
+
+
+def validate_ledger(
+    log_path: Path, today: date | None = None, attempts_dir: Path | None = None
+) -> dict[str, list[str]]:
     report: dict[str, list[str]] = {}
     attempts = parse_attempts(log_path)
     ledger_errors: list[str] = []
@@ -192,6 +298,8 @@ def validate_ledger(log_path: Path, today: date | None = None) -> dict[str, list
 
     for attempt in attempts:
         errors = validate_attempt(attempt, today=today)
+        if attempts_dir is not None:
+            errors.extend(validate_attempt_folder(attempt, attempts_dir))
         if errors:
             report.setdefault(attempt["id"], []).extend(errors)
     return report
@@ -200,13 +308,19 @@ def validate_ledger(log_path: Path, today: date | None = None) -> dict[str, list
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate submissions/submission-log.md")
     parser.add_argument("--log", required=True, type=Path)
+    parser.add_argument(
+        "--attempts-dir",
+        type=Path,
+        help="Directory holding the NN-<venue-slug> folders (default: the log's own directory)",
+    )
     args = parser.parse_args()
 
     if not args.log.exists():
         print(f"Note: {args.log} not found - no submissions recorded yet.")
         return 0
 
-    report = validate_ledger(args.log)
+    attempts_dir = args.attempts_dir or args.log.parent
+    report = validate_ledger(args.log, attempts_dir=attempts_dir)
     if not report:
         print("submission-log.md is valid.")
         return 0
