@@ -7,6 +7,8 @@ from scripts.verify_citations import (
     extract_bibtex_keys,
     extract_citation_keys_from_markdown,
     extract_registry_keys,
+    find_citations_missing_from_bib,
+    find_unregistered_bib_entries,
     find_unverified_citations,
 )
 
@@ -133,6 +135,71 @@ class TestFindUnverifiedCitations(unittest.TestCase):
             section_path.write_text("Uses [@smith2021boiler] only.", encoding="utf-8")
 
             self.assertEqual(find_unverified_citations([section_path], registry_path), {})
+
+
+class TestBibliographyInvariants(unittest.TestCase):
+    """Invariant B (bib subset of registry) and C (citations have bib entries)."""
+
+    def build(self, tmp: str, registry: list[dict], bib: str, section: str) -> tuple[Path, Path, Path]:
+        registry_path = Path(tmp) / "retrieved-sources.json"
+        registry_path.write_text(json.dumps(registry), encoding="utf-8")
+        bib_path = Path(tmp) / "references.bib"
+        bib_path.write_text(bib, encoding="utf-8")
+        section_path = Path(tmp) / "01-introduction.md"
+        section_path.write_text(section, encoding="utf-8")
+        return registry_path, bib_path, section_path
+
+    def registry_entry(self) -> dict:
+        return {
+            "key": "real2024",
+            "title": "Real",
+            "url": "https://example.org/a",
+            "retrieved_at": "2026-09-05",
+        }
+
+    def test_bib_entry_absent_from_registry_is_reported(self):
+        """The core hole this closes: a fabricated entry appended straight to the .bib."""
+        with TemporaryDirectory() as tmp:
+            registry_path, bib_path, _ = self.build(
+                tmp,
+                [self.registry_entry()],
+                "@article{real2024, title={Real}}\n@article{fabricated2023, title={Invented}}\n",
+                "Body text [@real2024].\n",
+            )
+            self.assertEqual(
+                find_unregistered_bib_entries(bib_path, registry_path), ["fabricated2023"]
+            )
+
+    def test_fully_registered_bib_passes(self):
+        with TemporaryDirectory() as tmp:
+            registry_path, bib_path, _ = self.build(
+                tmp,
+                [self.registry_entry()],
+                "@article{real2024, title={Real}}\n",
+                "Body text [@real2024].\n",
+            )
+            self.assertEqual(find_unregistered_bib_entries(bib_path, registry_path), [])
+
+    def test_citation_without_bib_entry_is_reported(self):
+        with TemporaryDirectory() as tmp:
+            _, bib_path, section_path = self.build(
+                tmp,
+                [self.registry_entry()],
+                "@article{real2024, title={Real}}\n",
+                "Claim one [@real2024] and claim two [@registered_but_not_in_bib].\n",
+            )
+            report = find_citations_missing_from_bib([section_path], bib_path)
+            self.assertEqual(report[str(section_path)], ["registered_but_not_in_bib"])
+
+    def test_section_with_all_citations_in_bib_passes(self):
+        with TemporaryDirectory() as tmp:
+            _, bib_path, section_path = self.build(
+                tmp,
+                [self.registry_entry()],
+                "@article{real2024, title={Real}}\n@inproceedings{other2025, title={Other}}\n",
+                "Claims [@real2024; @other2025] hold.\n",
+            )
+            self.assertEqual(find_citations_missing_from_bib([section_path], bib_path), {})
 
 
 if __name__ == "__main__":

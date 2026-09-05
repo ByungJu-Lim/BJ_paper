@@ -192,7 +192,8 @@ class TestValidateAll(unittest.TestCase):
                 "## Stage: results-discussion\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: code-experiment\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: figures-tables\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
-                "## Stage: citation-manage\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: citation-manage\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\n"
+                "last-critic-issues:\nverified-sources: 0\nrejected-citations:\n\n"
                 "## Stage: polish-review\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n",
             )
             report = validate_all(state_path)
@@ -213,6 +214,62 @@ class TestValidateAll(unittest.TestCase):
             self.assertTrue(any("duplicate" in error for error in errors))
             self.assertTrue(any("missing" in error for error in errors))
             self.assertTrue(any("order" in error for error in errors))
+
+
+class TestCitationBookkeeping(unittest.TestCase):
+    def stage(self, **overrides) -> dict:
+        base = {
+            "id": "citation-manage",
+            "status": "in-progress",
+            "round": "1/3",
+            "last-critic-verdict": None,
+            "verified-sources": "4",
+            "last-critic-issues": [],
+            "rejected-citations": [],
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_citation_stage_has_no_errors(self):
+        self.assertEqual(validate_stage(self.stage()), [])
+
+    def test_missing_verified_sources_is_flagged(self):
+        errors = validate_stage(self.stage(**{"verified-sources": None}))
+        self.assertTrue(any("verified-sources is required" in error for error in errors))
+
+    def test_non_numeric_verified_sources_is_flagged(self):
+        errors = validate_stage(self.stage(**{"verified-sources": "many"}))
+        self.assertTrue(any("non-negative integer" in error for error in errors))
+
+    def test_approved_with_zero_verified_sources_is_flagged(self):
+        errors = validate_stage(self.stage(status="approved", **{"verified-sources": "0"}))
+        self.assertTrue(any("approved with verified-sources 0" in error for error in errors))
+
+    def test_other_stage_must_not_carry_verified_sources(self):
+        errors = validate_stage(self.stage(id="lit-review", **{"verified-sources": "3"}))
+        self.assertTrue(any("belongs to citation-manage only" in error for error in errors))
+
+    def test_rejected_citations_are_parsed_as_a_list(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                "## Stage: citation-manage\n"
+                "status: in-progress\n"
+                "round: 1/3\n"
+                "last-critic-verdict: revise\n"
+                "last-critic-issues:\n"
+                '  - "one issue"\n'
+                "verified-sources: 2\n"
+                "rejected-citations:\n"
+                '  - "ghost2021: not in retrieved-sources.json"\n'
+                '  - "smith2019: retracted"\n',
+            )
+            stage = parse_stages(state_path)[0]
+            self.assertEqual(stage["last-critic-issues"], ["one issue"])
+            self.assertEqual(
+                stage["rejected-citations"],
+                ["ghost2021: not in retrieved-sources.json", "smith2019: retracted"],
+            )
 
 
 if __name__ == "__main__":

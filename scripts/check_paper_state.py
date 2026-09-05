@@ -6,7 +6,10 @@ STAGE_HEADER_RE = re.compile(r"^## Stage: (?P<id>.+)$")
 FIELD_RE = re.compile(r"^(?P<key>[\w-]+):\s*(?P<value>.*)$")
 ISSUE_RE = re.compile(r'^\s*-\s*"?(?P<issue>.*?)"?\s*$')
 
-TRACKED_SCALAR_FIELDS = ("status", "round", "last-critic-verdict")
+TRACKED_SCALAR_FIELDS = ("status", "round", "last-critic-verdict", "verified-sources")
+LIST_FIELDS = ("last-critic-issues", "rejected-citations")
+# The only stage carrying citation bookkeeping beyond the common fields.
+CITATION_STAGE_ID = "citation-manage"
 REQUIRED_STAGE_IDS = (
     "lit-review",
     "novelty-check",
@@ -22,7 +25,7 @@ REQUIRED_STAGE_IDS = (
 def parse_stages(state_path: Path) -> list[dict]:
     stages: list[dict] = []
     current: dict | None = None
-    in_issues = False
+    list_field: str | None = None
 
     for raw_line in state_path.read_text(encoding="utf-8").splitlines():
         header_match = STAGE_HEADER_RE.match(raw_line)
@@ -34,9 +37,11 @@ def parse_stages(state_path: Path) -> list[dict]:
                 "status": None,
                 "round": None,
                 "last-critic-verdict": None,
+                "verified-sources": None,
                 "last-critic-issues": [],
+                "rejected-citations": [],
             }
-            in_issues = False
+            list_field = None
             continue
 
         if current is None:
@@ -46,15 +51,15 @@ def parse_stages(state_path: Path) -> list[dict]:
         if field_match:
             key = field_match.group("key")
             value = field_match.group("value").strip()
-            in_issues = key == "last-critic-issues"
+            list_field = key if key in LIST_FIELDS else None
             if key in TRACKED_SCALAR_FIELDS:
                 current[key] = value or None
             continue
 
-        if in_issues:
+        if list_field:
             issue_match = ISSUE_RE.match(raw_line)
             if issue_match and raw_line.strip().startswith("-"):
-                current["last-critic-issues"].append(issue_match.group("issue"))
+                current[list_field].append(issue_match.group("issue"))
 
     if current is not None:
         stages.append(current)
@@ -112,7 +117,30 @@ def validate_stage(stage: dict) -> list[str]:
                 f"status 'escalated' or 'approved' (got '{status}')"
             )
 
+    errors.extend(validate_citation_bookkeeping(stage))
     return errors
+
+
+def validate_citation_bookkeeping(stage: dict) -> list[str]:
+    """citation-manage tracks how many sources survived verification and what was rejected."""
+    stage_id = stage["id"]
+    verified = stage.get("verified-sources")
+
+    if stage_id != CITATION_STAGE_ID:
+        if verified is not None:
+            return [f"{stage_id}: verified-sources belongs to {CITATION_STAGE_ID} only"]
+        return []
+
+    if verified is None:
+        return [f"{stage_id}: verified-sources is required"]
+    if not re.fullmatch(r"\d+", verified):
+        return [f"{stage_id}: verified-sources must be a non-negative integer (got '{verified}')"]
+
+    # An approved citation stage that verified nothing means the bibliography is empty,
+    # which is only ever an accident this late in the pipeline.
+    if stage["status"] == "approved" and int(verified) == 0:
+        return [f"{stage_id}: approved with verified-sources 0"]
+    return []
 
 
 def validate_all(state_path: Path) -> dict[str, list[str]]:

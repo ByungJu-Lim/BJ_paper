@@ -31,12 +31,12 @@
 python -m unittest discover -s tests -v
 python scripts/check_paper_state.py --state .omc/paper-state.md
 python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json
-python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online
-python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md
+python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online --mailto you@example.com
+python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --bib refs/references.bib
 ```
 
-- `verify_source_registry.py`는 출처의 필수 필드, URL, 날짜, 유형, DOI를 검사합니다. `--online`을 지정하면 DOI와 제목을 Crossref 메타데이터와 대조합니다.
-- `verify_citations.py`는 Pandoc 형식의 본문 인용 키가 검증된 출처 레지스트리에 모두 존재하는지 확인합니다.
+- `verify_source_registry.py`는 출처의 필수 필드, URL, 날짜(미래 날짜 거부), 유형, DOI를 검사합니다. `--online`은 DOI를 Crossref로 해석하고, arXiv·Zenodo처럼 DataCite에 등록된 DOI는 자동으로 DataCite로 넘어갑니다. 이어서 제목을 대조하고 Crossref의 Retraction Watch 피드로 철회 여부를 확인합니다.
+- `verify_citations.py`는 세 가지 불변식을 강제합니다. (A) 본문 인용 키가 모두 레지스트리에 있을 것, (B) BibTeX 항목이 모두 레지스트리에 있을 것, (C) 본문 인용 키가 모두 BibTeX에 있을 것. B가 없으면 `.bib`에 직접 써넣은 조작 항목을 아무도 잡지 못합니다.
 - `check_paper_state.py`는 단계 누락·중복·순서, 상태값, 검토 횟수 제한을 확인합니다.
 
 ## 안전성과 설계 원칙

@@ -19,6 +19,10 @@ Additionally check, specific to a final pass: terminology consistency across sec
 ## Procedure
 
 1. Delegate to `writer`: if `docs/sections/06-conclusion.md` has not yet been drafted, write it now, summarizing the approved Results/Discussion sections and restating the paper's contribution from `docs/notes/novelty-matrix.md`.
-2. Run `python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md` one more time — citations must still be clean after any late edits.
+2. Run the full citation audit one more time — late edits are exactly how dangling citations appear:
+   ```bash
+   python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json \n     --sections docs/sections/*.md --bib refs/references.bib
+   ```
+   This covers the manual "every in-text key is also in `refs/references.bib`" check above; do not eyeball it.
 3. Produce a short review report listing any remaining issues per section.
 4. Stop for the **final-polish user gate** — this is the last of the 4 fixed gates; do not mark the paper complete without explicit user sign-off.
