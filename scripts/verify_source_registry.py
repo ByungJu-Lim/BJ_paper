@@ -16,7 +16,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 ALLOWED_SOURCE_TYPES = {
@@ -47,6 +47,13 @@ AWAITING_USER_FILE_ACCESS = "awaiting-user-file"
 ALLOWED_ACCESS_LEVELS = {FULL_TEXT_ACCESS, ABSTRACT_ONLY_ACCESS, AWAITING_USER_FILE_ACCESS}
 
 DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", re.IGNORECASE)
+# Crossref marks a retracted article by prefixing its title. Publishers also mint
+# duplicate DOIs for the same article, and those duplicates carry neither the
+# prefix nor the retraction notice - so the marker has to be looked for across
+# every record sharing the title, not just the DOI in hand.
+RETRACTION_TITLE_RE = re.compile(
+    r"^\s*(?:retracted|withdrawn|retraction)\s*[:—–-]\s*", re.IGNORECASE
+)
 TITLE_SIMILARITY_THRESHOLD = 0.9
 USER_AGENT = "paper-agent-source-verifier/2.0"
 
@@ -124,6 +131,29 @@ def fetch_update_notices(doi: str, mailto: str | None = None) -> list[dict]:
     return notices
 
 
+def fetch_title_siblings(title: str, mailto: str | None = None) -> list[dict]:
+    """Crossref records sharing this title, used to spot duplicate-DOI retractions."""
+    url = "https://api.crossref.org/works?" + urlencode(
+        {"query.bibliographic": title, "rows": "5", "select": "DOI,title"}
+    )
+    return _get_json(url, mailto)["message"].get("items", [])
+
+
+def find_retracted_siblings(title: str, siblings: list[dict]) -> list[str]:
+    """DOIs of same-title records that Crossref has marked as retracted."""
+    ours = normalize_title(title)
+    hits: list[str] = []
+    for item in siblings:
+        titles = item.get("title") or []
+        raw = titles[0] if titles else ""
+        if not RETRACTION_TITLE_RE.match(raw):
+            continue
+        stripped = normalize_title(RETRACTION_TITLE_RE.sub("", raw))
+        if SequenceMatcher(None, ours, stripped).ratio() >= TITLE_SIMILARITY_THRESHOLD:
+            hits.append(str(item.get("DOI", "")))
+    return hits
+
+
 def _resolve_doi(
     doi: str,
     fetch_crossref: Callable[[str], dict],
@@ -188,6 +218,7 @@ def validate_registry(
     fetch_crossref: Callable[[str], dict] | None = None,
     fetch_datacite: Callable[[str], dict] | None = None,
     fetch_updates: Callable[[str], list[dict]] | None = None,
+    fetch_siblings: Callable[[str], list[dict]] | None = None,
     today: date | None = None,
     root: Path | None = None,
 ) -> list[str]:
@@ -204,6 +235,7 @@ def validate_registry(
     crossref = fetch_crossref or fetch_crossref_metadata
     datacite = fetch_datacite or fetch_datacite_metadata
     updates = fetch_updates or fetch_update_notices
+    siblings = fetch_siblings or fetch_title_siblings
     current_day = today or date.today()
     base_dir = root if root is not None else Path(".")
 
@@ -273,12 +305,34 @@ def validate_registry(
             errors.append(f"{label}: retraction screening failed: {exc}")
             continue
 
-        blocking = sorted({n["type"] for n in notices if n["type"] in BLOCKING_UPDATE_TYPES})
         acknowledged = entry.get("retraction_ack")
-        if blocking and not (isinstance(acknowledged, str) and acknowledged.strip()):
+        is_acknowledged = isinstance(acknowledged, str) and bool(acknowledged.strip())
+
+        blocking = sorted({n["type"] for n in notices if n["type"] in BLOCKING_UPDATE_TYPES})
+        if blocking and not is_acknowledged:
             errors.append(
                 f"{label}: flagged as {', '.join(blocking)} - do not cite as a valid "
                 "result; set 'retraction_ack' with a reason to cite it deliberately"
+            )
+            continue
+
+        if blocking or is_acknowledged:
+            continue
+
+        # No notice points at this DOI, but a duplicate record of the same article
+        # may carry the retraction instead.
+        try:
+            same_title = siblings(title)
+        except (HTTPError, URLError, KeyError, TypeError, ValueError) as exc:
+            errors.append(f"{label}: duplicate-record screening failed: {exc}")
+            continue
+
+        retracted_twins = [d for d in find_retracted_siblings(title, same_title) if d != doi]
+        if retracted_twins:
+            errors.append(
+                f"{label}: another record of this article is marked retracted "
+                f"({', '.join(retracted_twins)}); this DOI is likely a duplicate of a "
+                "retracted work - verify by hand before citing"
             )
 
     return errors

@@ -12,22 +12,30 @@
 
 ## 스킬
 
-| 스킬 | 역할 |
-|---|---|
-| `paper-supervise` | 전체 파이프라인 조율. 작업 시작과 재개 시 실행 |
-| `lit-review` | 실제 출처를 검색하고 `docs/notes/retrieved-sources.json`에 등록 |
-| `novelty-check` | 주장과 선행 연구를 비교하고 자기 중복을 점검 |
-| `outline-draft` | 개요와 섹션별 초안 작성 |
-| `results-discussion` | `data/processed/`를 분석해 결과와 논의 작성 |
-| `code-experiment` | 실험·분석 코드 작성 및 실행 |
-| `figures-tables` | 처리된 데이터로 그림과 표 생성 |
-| `citation-manage` | `refs/references.bib`를 수정할 수 있는 유일한 경로 |
-| `polish-review` | 논문 완료 전 전체 초안 최종 검토 |
-| `submission-manage` | 투고처 선정, 투고 기록, 심사 결과 반영, 거절 시 투고처 이전 |
+| 스킬                   | 역할                                                  |
+| -------------------- | --------------------------------------------------- |
+| `paper-supervise`    | 전체 파이프라인 조율. 작업 시작과 재개 시 실행                         |
+| `lit-review`         | 실제 출처를 검색하고 `docs/notes/retrieved-sources.json`에 등록 |
+| `novelty-check`      | 주장과 선행 연구를 비교하고 자기 중복을 점검                           |
+| `outline-draft`      | 개요와 섹션별 초안 작성                                       |
+| `results-discussion` | `data/processed/`를 분석해 결과와 논의 작성                    |
+| `code-experiment`    | 실험·분석 코드 작성 및 실행                                    |
+| `figures-tables`     | 처리된 데이터로 그림과 표 생성                                   |
+| `citation-manage`    | `refs/references.bib`를 수정할 수 있는 유일한 경로              |
+| `polish-review`      | 논문 완료 전 전체 초안 최종 검토                                 |
+| `submission-manage`  | 투고처 선정, 투고 기록, 심사 결과 반영, 거절 시 투고처 이전                |
 
 ## 검증 도구
 
 모든 도구는 Python 3.10 이상과 표준 라이브러리만 사용합니다.
+
+검색은 OpenAlex를 먼저 씁니다. 색인에서 구조화된 메타데이터를 받으므로 제목·DOI를 지어낼 수 없고, 오픈액세스 PDF 위치도 함께 알려줍니다.
+
+```bash
+python scripts/search_openalex.py --query "heat exchanger fouling" --limit 15 --from-year 2018 --mailto you@example.com
+```
+
+이 스크립트는 **검색만** 합니다. 결과는 여전히 신뢰할 수 없는 입력이며 아래 검증을 통과해야 레지스트리에 들어갑니다.
 
 ```bash
 python -m unittest discover -s tests -v

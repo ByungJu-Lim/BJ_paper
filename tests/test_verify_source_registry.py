@@ -32,6 +32,7 @@ class RegistryTestCase(unittest.TestCase):
             "fetch_crossref": unreachable,
             "fetch_datacite": unreachable,
             "fetch_updates": lambda doi: [],
+            "fetch_siblings": lambda title: [],
             "today": date(2026, 9, 5),
         }
         kwargs.update(overrides)
@@ -228,6 +229,46 @@ class TestRetractionScreening(RegistryTestCase):
                 path,
                 fetch_crossref=self.metadata,
                 fetch_updates=self.notices("retraction"),
+            )
+            self.assertEqual(errors, [])
+
+    def test_duplicate_record_of_a_retracted_article_is_caught(self):
+        """Publishers mint second DOIs that carry neither the marker nor the notice."""
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [dict(self.RETRACTED)])
+            errors = self.validate(
+                path,
+                fetch_crossref=self.metadata,
+                fetch_updates=lambda doi: [],
+                fetch_siblings=lambda title: [
+                    {"DOI": "10.1234/original", "title": ["RETRACTED: Retracted Study"]}
+                ],
+            )
+            self.assertTrue(any("marked retracted" in error for error in errors))
+
+    def test_unrelated_same_field_title_is_not_flagged(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [dict(self.RETRACTED)])
+            errors = self.validate(
+                path,
+                fetch_crossref=self.metadata,
+                fetch_updates=lambda doi: [],
+                fetch_siblings=lambda title: [
+                    {"DOI": "10.1234/other", "title": ["RETRACTED: A Completely Different Paper"]}
+                ],
+            )
+            self.assertEqual(errors, [])
+
+    def test_acknowledged_retraction_skips_duplicate_screening(self):
+        with TemporaryDirectory() as tmp:
+            entry = dict(self.RETRACTED)
+            entry["retraction_ack"] = "discussed as a case of research misconduct"
+            path = self.write_registry(tmp, [entry])
+            errors = self.validate(
+                path,
+                fetch_crossref=self.metadata,
+                fetch_updates=lambda doi: [],
+                fetch_siblings=unreachable,
             )
             self.assertEqual(errors, [])
 

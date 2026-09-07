@@ -11,7 +11,25 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
 
 ## Procedure
 
-1. Delegate to the `scientist` agent: search for papers/reports relevant to the given topic or keyword using WebSearch.
+1. Search OpenAlex first. It returns structured metadata straight from the index,
+   so titles and DOIs cannot be invented, and it reports open-access PDF locations
+   — which often decides whether you can read the paper or have to ask the user
+   for it:
+   ```bash
+   python scripts/search_openalex.py --query "<topic>" --limit 15      --from-year 2018 --mailto <your email>
+   ```
+   Each candidate has an `entry` block already shaped for the registry, plus
+   `pdf_url`, `is_oa`, `venue`, and `cited_by_count` to judge relevance. Retracted
+   works are filtered out and counted.
+
+   Two things this does **not** do. It does not verify anything — candidates are
+   still untrusted until `verify_source_registry.py` resolves the DOI and screens
+   for retractions. And coverage is incomplete: some arXiv DOIs are missing, so
+   absence from OpenAlex is not evidence a source does not exist.
+
+   Delegate to the `scientist` agent to widen the search with WebSearch where
+   OpenAlex comes up short — grey literature, standards, technical reports, and
+   vendor documentation are poorly indexed there.
 2. For each real result, append one object to `docs/notes/retrieved-sources.json`:
    ```json
    {
