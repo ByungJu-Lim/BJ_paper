@@ -8,3 +8,5 @@ __pycache__/
 .env
 .env.*
 !.env.example
+docs/sources/*
+!docs/sources/README.md

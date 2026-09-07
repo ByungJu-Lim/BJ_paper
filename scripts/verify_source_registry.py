@@ -37,6 +37,15 @@ BLOCKING_UPDATE_TYPES = {
     "removal",
     "expression_of_concern",
 }
+
+# How much of the source was actually read. Citing a paper for a method or a
+# number that appears only in its full text, having read only the abstract, is
+# how a citation ends up misrepresenting what the paper says.
+FULL_TEXT_ACCESS = "full-text"
+ABSTRACT_ONLY_ACCESS = "abstract-only"
+AWAITING_USER_FILE_ACCESS = "awaiting-user-file"
+ALLOWED_ACCESS_LEVELS = {FULL_TEXT_ACCESS, ABSTRACT_ONLY_ACCESS, AWAITING_USER_FILE_ACCESS}
+
 DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", re.IGNORECASE)
 TITLE_SIMILARITY_THRESHOLD = 0.9
 USER_AGENT = "paper-agent-source-verifier/2.0"
@@ -146,6 +155,33 @@ def _check_metadata(label: str, title: str, doi: str, metadata: dict, agency: st
     return errors
 
 
+def validate_access(label: str, entry: dict, root: Path) -> list[str]:
+    """Check what was actually read, and surface sources still waiting on the user."""
+    errors: list[str] = []
+    access = entry.get("access")
+
+    if access not in ALLOWED_ACCESS_LEVELS:
+        return [
+            f"{label}: access must be one of {', '.join(sorted(ALLOWED_ACCESS_LEVELS))}"
+        ]
+
+    if access == AWAITING_USER_FILE_ACCESS:
+        errors.append(
+            f"{label}: full text is not reachable - ask the user to download the PDF to "
+            f"docs/sources/{entry.get('key', '<key>')}.pdf, then set local_file and "
+            f"access '{FULL_TEXT_ACCESS}'"
+        )
+
+    local_file = entry.get("local_file")
+    if local_file is not None:
+        if not isinstance(local_file, str) or not local_file.strip():
+            errors.append(f"{label}: local_file must be a non-empty path")
+        elif not (root / local_file).is_file():
+            errors.append(f"{label}: local_file '{local_file}' does not exist")
+
+    return errors
+
+
 def validate_registry(
     registry_path: Path,
     online: bool = False,
@@ -153,6 +189,7 @@ def validate_registry(
     fetch_datacite: Callable[[str], dict] | None = None,
     fetch_updates: Callable[[str], list[dict]] | None = None,
     today: date | None = None,
+    root: Path | None = None,
 ) -> list[str]:
     try:
         data = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -168,6 +205,7 @@ def validate_registry(
     datacite = fetch_datacite or fetch_datacite_metadata
     updates = fetch_updates or fetch_update_notices
     current_day = today or date.today()
+    base_dir = root if root is not None else Path(".")
 
     for index, entry in enumerate(data):
         label = f"entry {index}"
@@ -203,6 +241,8 @@ def validate_registry(
         source_type = entry.get("source_type")
         if source_type not in ALLOWED_SOURCE_TYPES:
             errors.append(f"{label}: invalid source_type '{source_type}'")
+
+        errors.extend(validate_access(label, entry, base_dir))
 
         raw_doi = entry.get("doi")
         doi = normalize_doi(raw_doi) if isinstance(raw_doi, str) else ""

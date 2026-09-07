@@ -47,6 +47,7 @@ class TestStructuralValidation(RegistryTestCase):
                 "url": "https://www.nist.gov/itl/ai-risk-management-framework",
                 "retrieved_at": "2026-09-05",
                 "source_type": "standard",
+                "access": "full-text",
             }])
             self.assertEqual(validate_registry(path), [])
 
@@ -58,6 +59,7 @@ class TestStructuralValidation(RegistryTestCase):
                 "url": "not-a-url",
                 "retrieved_at": "yesterday",
                 "source_type": "web",
+                "access": "full-text",
             }])
             errors = validate_registry(path)
             self.assertTrue(any("URL" in error for error in errors))
@@ -71,6 +73,7 @@ class TestStructuralValidation(RegistryTestCase):
                 "url": "https://example.org/a",
                 "retrieved_at": "2027-01-01",
                 "source_type": "web",
+                "access": "full-text",
             }])
             errors = validate_registry(path, today=date(2026, 9, 5))
             self.assertTrue(any("future" in error for error in errors))
@@ -83,6 +86,7 @@ class TestStructuralValidation(RegistryTestCase):
                 "url": "https://arxiv.org/abs/2601.00001",
                 "retrieved_at": "2026-09-05",
                 "source_type": "preprint",
+                "access": "full-text",
             }])
             errors = validate_registry(path)
             self.assertTrue(any("requires a DOI" in error for error in errors))
@@ -98,6 +102,7 @@ class TestDoiResolution(RegistryTestCase):
                 "doi": "10.1234/example",
                 "retrieved_at": "2026-09-05",
                 "source_type": "journal-article",
+                "access": "full-text",
             }])
             errors = self.validate(
                 path,
@@ -114,6 +119,7 @@ class TestDoiResolution(RegistryTestCase):
                 "doi": "https://doi.org/10.1234/example",
                 "retrieved_at": "2026-09-05",
                 "source_type": "journal-article",
+                "access": "full-text",
             }])
             errors = self.validate(
                 path,
@@ -131,6 +137,7 @@ class TestDoiResolution(RegistryTestCase):
                 "doi": "10.48550/arXiv.1706.03762",
                 "retrieved_at": "2026-09-05",
                 "source_type": "preprint",
+                "access": "full-text",
             }])
 
             def crossref_404(doi: str) -> dict:
@@ -152,6 +159,7 @@ class TestDoiResolution(RegistryTestCase):
                 "doi": "10.9999/does-not-exist",
                 "retrieved_at": "2026-09-05",
                 "source_type": "journal-article",
+                "access": "full-text",
             }])
 
             def not_found(doi: str) -> dict:
@@ -169,6 +177,7 @@ class TestRetractionScreening(RegistryTestCase):
         "doi": "10.1234/retracted",
         "retrieved_at": "2026-09-05",
         "source_type": "journal-article",
+        "access": "full-text",
     }
 
     def metadata(self, doi: str) -> dict:
@@ -233,6 +242,66 @@ class TestRetractionScreening(RegistryTestCase):
                 fetch_updates=self.notices("retraction"),
             )
             self.assertTrue(any("flagged as retraction" in error for error in errors))
+
+
+class TestFullTextAccess(RegistryTestCase):
+    def entry(self, **overrides) -> dict:
+        base = {
+            "key": "smith2024boiler",
+            "title": "Boiler Efficiency",
+            "url": "https://example.org/a",
+            "retrieved_at": "2026-09-05",
+            "source_type": "report",
+            "access": "full-text",
+        }
+        base.update(overrides)
+        return base
+
+    def test_missing_access_is_reported(self):
+        with TemporaryDirectory() as tmp:
+            entry = self.entry()
+            del entry["access"]
+            path = self.write_registry(tmp, [entry])
+            errors = validate_registry(path)
+            self.assertTrue(any("access must be one of" in error for error in errors))
+
+    def test_unknown_access_level_is_reported(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry(access="skimmed-it")])
+            errors = validate_registry(path)
+            self.assertTrue(any("access must be one of" in error for error in errors))
+
+    def test_abstract_only_is_allowed(self):
+        """Some claims genuinely rest on the abstract; the point is to record which."""
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry(access="abstract-only")])
+            self.assertEqual(validate_registry(path), [])
+
+    def test_awaiting_user_file_blocks_and_names_the_path(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry(access="awaiting-user-file")])
+            errors = validate_registry(path)
+            self.assertEqual(len(errors), 1)
+            self.assertIn("ask the user to download", errors[0])
+            self.assertIn("docs/sources/smith2024boiler.pdf", errors[0])
+
+    def test_declared_local_file_must_exist(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(
+                tmp, [self.entry(local_file="docs/sources/smith2024boiler.pdf")]
+            )
+            errors = validate_registry(path, root=Path(tmp))
+            self.assertTrue(any("does not exist" in error for error in errors))
+
+    def test_present_local_file_passes(self):
+        with TemporaryDirectory() as tmp:
+            pdf = Path(tmp) / "docs" / "sources" / "smith2024boiler.pdf"
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b"%PDF-1.4")
+            path = self.write_registry(
+                tmp, [self.entry(local_file="docs/sources/smith2024boiler.pdf")]
+            )
+            self.assertEqual(validate_registry(path, root=Path(tmp)), [])
 
 
 if __name__ == "__main__":
