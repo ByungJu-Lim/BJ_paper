@@ -1,33 +1,40 @@
 ---
 name: paper-supervise
-description: Orchestrates the paper-writing pipeline via .omc/paper-state.md — figures out which stage is next, runs each stage's generate-then-review loop (max 3 rounds), and enforces the 4 fixed user-approval gates instead of auto-passing. Use when starting work, resuming after a break, or asking "what's next".
+description: Orchestrates the paper-writing pipeline via .omc/paper-state.md — figures out which stage is next, runs each stage's generate-then-review loop (max 3 rounds), and enforces the fixed user-approval gates instead of auto-passing. Use when starting work, resuming after a break, or asking "what's next".
 ---
 
 # Paper Supervisor
 
 ## Stage order
 
-1. `lit-review`
-2. `novelty-check`
-3. `outline-draft`
-4. `results-discussion`, `code-experiment`, `figures-tables` (any order, once `code/` has produced `data/processed/`)
-5. `citation-manage`
-6. `polish-review`
-7. `submission-manage` — venue selection, submission, and every editorial decision after it
+1. `story-brief`
+2. `lit-review`
+3. `novelty-check`
+4. `outline-draft`
+5. `results-discussion`, `code-experiment`, `figures-tables` (any order, once `code/` has produced `data/processed/`)
+6. `citation-manage`
+7. `polish-review`
+8. `submission-manage` — venue selection, submission, and every editorial decision after it
 
-Stages 1-6 produce the manuscript; stage 7 repeats for as long as the paper is in review. A rejection sends specific stages back to `in-progress`, it does not restart the pipeline.
+Stages 1-7 produce the manuscript; stage 8 repeats for as long as the paper is in review. A rejection sends specific stages back to `in-progress`, it does not restart the pipeline.
 
 ## On invocation
 
-1. Run `python scripts/check_paper_state.py --state .omc/paper-state.md`. If it reports errors, stop and show them to the user before doing anything else. Repair only deterministic format/order errors; never guess research decisions or approvals.
-2. Before completing `lit-review` or starting `citation-manage`, run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online`. This resolves each DOI (Crossref, falling back to DataCite for arXiv and Zenodo), matches titles, and screens against Crossref's Retraction Watch feed. Stop and quarantine any source that fails — a retracted source is a hard stop, not a warning. A source reported as `awaiting-user-file` is a request to relay: give the user the key, title, DOI, and the exact `docs/sources/` path, and wait for the file rather than proceeding on the abstract.
-3. Once `polish-review` is `approved`, also run `python scripts/check_submissions.py --log submissions/submission-log.md` and report the open attempt's venue and status. If an attempt is `submitted` or `under-review`, the paper is with a venue and the only valid work is answering a decision — do not open a new attempt.
-4. Read `.omc/paper-state.md` and find the first stage (in the order above) whose `status` is not `approved` (an `escalated` stage surfaces here too — the user must resolve it before the pipeline continues).
-5. Report that stage and its current `status`/`round` to the user, then proceed per the loop below.
+1. Read `docs/notes/story-brief.md` before anything else and restate the `Question` slot in your first message. Every stage below serves that one sentence; a stage whose output does not move a claim in the brief's ledger is off course. Validate it with:
+   ```bash
+   python scripts/verify_story_brief.py --brief docs/notes/story-brief.md \
+     --sections docs/sections/*.md --registry docs/notes/retrieved-sources.json
+   ```
+   This is what keeps a long drafting run from drifting: it fails when a section carries a claim that is not in the ledger, when a `refuted` claim is still being argued, or when Results/Discussion/Conclusion assert a claim that is still `assumed`. At `polish-review`, add `--require-slots all --require-coverage`.
+2. Run `python scripts/check_paper_state.py --state .omc/paper-state.md`. If it reports errors, stop and show them to the user before doing anything else. Repair only deterministic format/order errors; never guess research decisions or approvals.
+3. Before completing `lit-review` or starting `citation-manage`, run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online`. This resolves each DOI (Crossref, falling back to DataCite for arXiv and Zenodo), matches titles, and screens against Crossref's Retraction Watch feed. Stop and quarantine any source that fails — a retracted source is a hard stop, not a warning. A source reported as `awaiting-user-file` is a request to relay: give the user the key, title, DOI, and the exact `docs/sources/` path, and wait for the file rather than proceeding on the abstract.
+4. Once `polish-review` is `approved`, also run `python scripts/check_submissions.py --log submissions/submission-log.md` and report the open attempt's venue and status. If an attempt is `submitted` or `under-review`, the paper is with a venue and the only valid work is answering a decision — do not open a new attempt.
+5. Read `.omc/paper-state.md` and find the first stage (in the order above) whose `status` is not `approved` (an `escalated` stage surfaces here too — the user must resolve it before the pipeline continues).
+6. Report that stage and its current `status`/`round` to the user, then proceed per the loop below.
 
 ## Generate-then-review loop (per stage)
 
-1. Delegate generation to the agent listed for that stage in `CLAUDE.md`'s workflow table (`scientist` for `lit-review`/analysis, `writer` for drafting, `executor` for code/figures, `verifier` for citations).
+1. Delegate generation to the agent listed for that stage in `CLAUDE.md`'s workflow table (`writer` with `analyst` for `story-brief`, `scientist` for `lit-review`/analysis, `writer` for drafting, `executor` for code/figures, `verifier` for citations).
 2. Delegate review to `critic` (or `verifier` for `citation-manage`) using this rubric — record the verdict and any issues back into the stage's `last-critic-verdict` / `last-critic-issues` fields:
    - novelty/significance
    - technical soundness
@@ -42,6 +49,8 @@ Stages 1-6 produce the manuscript; stage 7 repeats for as long as the paper is i
 ## Fixed user-approval gates
 
 Regardless of critic verdict, always stop for explicit user sign-off at:
+- story brief complete (`story-brief` stage, before any literature search runs against it — approving the argument is what makes the rest of the pipeline meaningful)
+- narrative revision (`story-brief`, whenever evidence refutes a claim and a narrative slot has to be rewritten — the user decides whether the paper changes shape or the claim is dropped)
 - outline complete (`outline-draft` stage, before drafting any section)
 - each section draft complete (`outline-draft` / `results-discussion` stages)
 - citations finalized (`citation-manage` stage, before any `refs/references.bib` edit is treated as final)

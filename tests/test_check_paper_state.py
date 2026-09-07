@@ -178,6 +178,11 @@ class TestValidateAll(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             state_path = write_state(
                 tmp,
+                "## Stage: story-brief\n"
+                "status: approved\n"
+                "round: 1/3\n"
+                "last-critic-verdict: pass\n"
+                "last-critic-issues:\n\n"
                 "## Stage: lit-review\n"
                 "status: approved\n"
                 "round: 1/3\n"

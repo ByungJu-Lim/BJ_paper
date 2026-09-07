@@ -1,5 +1,11 @@
 # Paper State
 
+## Stage: story-brief
+status: not-started
+round: 0/3
+last-critic-verdict:
+last-critic-issues:
+
 ## Stage: lit-review
 status: not-started
 round: 0/3

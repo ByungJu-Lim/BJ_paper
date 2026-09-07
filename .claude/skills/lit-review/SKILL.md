@@ -16,7 +16,8 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
    — which often decides whether you can read the paper or have to ask the user
    for it:
    ```bash
-   python scripts/search_openalex.py --query "<topic>" --limit 15      --from-year 2018 --mailto <your email>
+   python scripts/search_openalex.py --query "<topic>" --limit 15 \
+     --from-year 2018 --mailto <your email>
    ```
    Each candidate has an `entry` block already shaped for the registry, plus
    `pdf_url`, `is_oa`, `venue`, and `cited_by_count` to judge relevance. Retracted
@@ -72,4 +73,19 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
 5. Run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json`. For every entry carrying a DOI, also run it with `--online` (add `--mailto <your email>` for the Crossref polite pool). That resolves the DOI, matches the title, and screens the work against Crossref's Retraction Watch feed. Quarantine failed entries instead of using them.
    A source flagged as retracted, withdrawn, or under an expression of concern must not be cited as a valid result. If you are deliberately citing it *as* a retracted work, record why in a `retraction_ack` field on that entry — there is no other way past the block.
 6. Write or update a summary note at `docs/notes/<topic-slug>.md` covering what the source claims and how it relates to the current paper's topic.
-7. Hand off to `paper-supervise`, which routes the result through the critic for the `lit-review` stage's review round.
+7. Update `docs/notes/story-brief.md`. This is the step that keeps the search
+   honest rather than confirmatory:
+   - Rewrite the `Gap` slot to match what the literature actually shows. A `Gap`
+     that survives a real search untouched is usually a `Gap` nobody looked for.
+   - For every claim the search settled, set `status` to `supported` or
+     `refuted` with the source key as evidence (`@kim2021flux`). A claim the
+     search contradicts is `refuted`, not quietly deleted — and its narrative
+     slot has to be rewritten, which is a user gate.
+   - Only `full-text` sources may support a claim that the abstract does not
+     state outright.
+   Then re-run the check:
+   ```bash
+   python scripts/verify_story_brief.py --require-slots Context,Gap,Question \
+     --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md
+   ```
+8. Hand off to `paper-supervise`, which routes the result through the critic for the `lit-review` stage's review round.

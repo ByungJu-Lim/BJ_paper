@@ -11,6 +11,7 @@ LIST_FIELDS = ("last-critic-issues", "rejected-citations")
 # The only stage carrying citation bookkeeping beyond the common fields.
 CITATION_STAGE_ID = "citation-manage"
 REQUIRED_STAGE_IDS = (
+    "story-brief",
     "lit-review",
     "novelty-check",
     "outline-draft",

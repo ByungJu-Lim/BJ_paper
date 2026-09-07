@@ -19,6 +19,12 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Validate workflow state
         run: python scripts/check_paper_state.py --state .omc/paper-state.md
+      - name: Validate story brief
+        run: |
+          python scripts/verify_story_brief.py \
+            --brief docs/notes/story-brief.md \
+            --sections docs/sections/*.md \
+            --registry docs/notes/retrieved-sources.json
       - name: Validate source registry structure
         run: python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json
       - name: Validate submission ledger
