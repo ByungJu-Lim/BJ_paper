@@ -55,7 +55,12 @@ python scripts/check_submissions.py --log submissions/submission-log.md
    and record it:
    ```bash
    git tag submission/NN-<venue-slug>
+   git push origin submission/NN-<venue-slug>
    ```
+   Push the tag. `git push origin main` does **not** carry tags, and a tag that
+   exists only on one machine cannot reconstruct what was submitted — which is the
+   entire reason for tagging. If a `github` remote exists, push it there too.
+
    Set `status: submitted`, `submitted-on`, and `manuscript-tag` in the ledger.
 
 ## Recording a decision
