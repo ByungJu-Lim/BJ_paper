@@ -9,7 +9,7 @@ description: Generates figures and tables from processed experiment data. Use on
 
 1. Delegate to `executor`: write a plotting/table-generation script under `code/` that reads from `data/processed/` and writes working images to `figures/*.png`. These are the venue-neutral renders used while drafting.
 2. Take every render setting the venue controls — output format, DPI, figure width, colour mode, font — as **parameters of that script**, never as values hard-coded inside it. Journals differ on all of them, and a script that can only emit one variant has to be rewritten at every venue change.
-3. Embed any tables directly as Markdown tables in the relevant `docs/sections/*.md` file (not as images), with a one-line caption above each table and figure reference.
+3. Embed tables as Markdown tables (header, separator, data rows) and images as local Markdown links in the section. Put `Table 1: Description` immediately above the table or `Fig. 1: Description` immediately above `![Description](../../figures/fig1.png)`. Caption numbers must be unique by kind across sections. The story validator resolves evidence to these captions and files; a prose mention alone is not evidence.
 4. Hand off to `critic` through the `paper-supervise` loop: review checks axis labels, units, and caption accuracy against `data/processed/`.
 
 ## Rendering for a venue

@@ -9,29 +9,28 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.14']
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python }}
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Validate workflow state
         run: python scripts/check_paper_state.py --state .omc/paper-state.md
       - name: Validate story brief
-        run: |
-          python scripts/verify_story_brief.py \
-            --brief docs/notes/story-brief.md \
-            --sections docs/sections/*.md \
-            --registry docs/notes/retrieved-sources.json
+        run: python scripts/verify_story_brief.py --state .omc/paper-state.md --brief docs/notes/story-brief.md --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json
       - name: Validate source registry structure
         run: python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json
       - name: Validate submission ledger
         run: python scripts/check_submissions.py --log submissions/submission-log.md
       - name: Verify citations and bibliography
-        run: |
-          python scripts/verify_citations.py \
-            --registry docs/notes/retrieved-sources.json \
-            --sections docs/sections/*.md \
-            --bib refs/references.bib
+        run: python scripts/verify_citations.py --state .omc/paper-state.md --registry docs/notes/retrieved-sources.json --sections "docs/sections/*.md" --bib refs/references.bib

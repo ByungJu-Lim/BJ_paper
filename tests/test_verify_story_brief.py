@@ -206,21 +206,21 @@ class TestValidateEvidence(unittest.TestCase):
             self.assertTrue(any("has no manifest" in error for error in errors))
 
             (processed / "2026-09-07-a.manifest.json").write_text("{}", encoding="utf-8")
-            self.assertEqual(validate_evidence(self.brief("run:2026-09-07-a"), None, processed), [])
+            self.assertTrue(validate_evidence(self.brief("run:2026-09-07-a"), None, processed))
 
-    def test_figure_and_table_evidence_is_accepted(self):
+    def test_figure_and_table_evidence_requires_rendered_sections(self):
         with TemporaryDirectory() as tmp:
-            self.assertEqual(validate_evidence(self.brief("Fig. 2, Table 3"), None, Path(tmp)), [])
+            self.assertTrue(validate_evidence(self.brief("Fig. 2, Table 3"), None, Path(tmp)))
 
     def test_unrecognised_evidence_is_flagged(self):
         with TemporaryDirectory() as tmp:
             errors = validate_evidence(self.brief("trust me"), None, Path(tmp))
             self.assertTrue(any("unrecognised evidence" in error for error in errors))
 
-    def test_missing_registry_file_skips_key_resolution(self):
+    def test_missing_registry_file_fails_key_resolution(self):
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "absent.json"
-            self.assertEqual(validate_evidence(self.brief("@anything"), missing, Path(tmp)), [])
+            self.assertTrue(validate_evidence(self.brief("@anything"), missing, Path(tmp)))
 
 
 class TestSectionDeclarations(unittest.TestCase):
@@ -283,7 +283,7 @@ class TestValidateSections(unittest.TestCase):
 
     def test_require_coverage_flags_claims_no_section_carries(self):
         with TemporaryDirectory() as tmp:
-            intro = write_section(tmp, "01-introduction.md", "<!-- claims: C1 -->\n")
+            intro = write_section(tmp, "01-introduction.md", "<!-- claims: C1 -->\nA hypothesis.\n")
             brief = self.brief({"C1": "assumed", "C2": "assumed", "C3": "refuted"})
 
             self.assertEqual(validate_sections(brief, [intro], False), [])

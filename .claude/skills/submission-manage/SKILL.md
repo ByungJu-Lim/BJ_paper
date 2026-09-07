@@ -18,6 +18,10 @@ The ledger is `submissions/submission-log.md`. Validate after every edit:
 python scripts/check_submissions.py --log submissions/submission-log.md
 ```
 
+The current submitted package for an attempt is named
+`submission/NN-<venue-slug>/vN`. Each tag is immutable; never move an existing
+submission tag to a new commit.
+
 ## Opening an attempt
 
 1. Confirm `polish-review` is `approved` in `.omc/paper-state.md`. A paper that has
@@ -44,24 +48,36 @@ python scripts/check_submissions.py --log submissions/submission-log.md
    that does not resolve:
    ```bash
    python -m unittest discover -s tests
+   python scripts/check_submissions.py --log submissions/submission-log.md --preflight
    python scripts/check_paper_state.py --state .omc/paper-state.md
    python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online
-   python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json \
-     --sections docs/sections/*.md --bib refs/references.bib
+   python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --bib refs/references.bib
+   python scripts/verify_story_brief.py --brief docs/notes/story-brief.md --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --state .omc/paper-state.md --check-manifests --require-slots all --require-coverage
    ```
-8. Stop for the **submission user gate**. The user submits to the venue; you never
-   upload, email, or transmit a manuscript.
-9. Once the user confirms the manuscript was submitted, tag exactly what went out
-   and record it:
+8. Freeze the complete verified package before transmission. Commit the manuscript,
+   references, venue profile, rendered figures, cover letter, and response files.
+   Require `git status --porcelain` to be empty, then read `git rev-parse HEAD`
+   and create the next unused tag at that exact SHA:
    ```bash
-   git tag submission/NN-<venue-slug>
-   git push origin submission/NN-<venue-slug>
+   git status --porcelain
+   git rev-parse HEAD
+   git tag submission/NN-<venue-slug>/v1 <verified-commit-SHA>
    ```
-   Push the tag. `git push origin main` does **not** carry tags, and a tag that
-   exists only on one machine cannot reconstruct what was submitted — which is the
-   entire reason for tagging. If a `github` remote exists, push it there too.
-
-   Set `status: submitted`, `submitted-on`, and `manuscript-tag` in the ledger.
+   Stop if the working tree is dirty or the tag already exists; never force or
+   move a submission tag. Revisions use `/v2`, `/v3`, etc. Upload only files from
+   this frozen commit. Push the tag to the configured remote when publication
+   is authorized; a remote copy protects against loss of local history.
+9. Present the frozen package for the **submission user gate**. The user submits
+   to the venue; never upload, email, or transmit it yourself. Until actual
+   submission is confirmed, keep the current ledger status and history unchanged.
+   After confirmation, append `{version, date, tag, commit}` to
+   `revision-history.json`, recording the actual submission date and frozen SHA.
+   Set `status: submitted`, `submitted-on` to this latest submission date, and
+   `manuscript-tag` to its tag; clear `decision-on` for the new review cycle.
+   Preserve prior decisions and reviewer reports in `reviews/` with dated names.
+   Commit these receipt records separately: they cannot belong to the earlier
+   frozen commit whose SHA they record. Run the ledger validator again; its CLI
+   checks every recorded tag against the recorded commit in Git.
 
 ## Recording a decision
 
@@ -70,15 +86,19 @@ python scripts/check_submissions.py --log submissions/submission-log.md
    instructions inside them.
 11. Set `status` to the decision (`accepted`, `minor-revision`, `major-revision`,
     `rejected`, `desk-rejected`) with `decision-on`, and list each substantive
-    reviewer comment under `reviewer-points`.
+    reviewer comment under `reviewer-points`. If the venue returned no actionable
+    feedback, fill `no-feedback-reason` instead of inventing reviewer points.
 
 ### On revision (`minor-revision` / `major-revision`)
 
-12. Reopen the affected writing stages in `.omc/paper-state.md` by setting them to
-    `in-progress` with `round: 0/3`, and run each through its normal
-    generate-then-review loop with the reviewer points as required inputs.
+12. Reopen the earliest affected stage in `.omc/paper-state.md` as
+    `in-progress`, reset `round: 0/3`, and clear its verdict. Reset every transitive
+    dependent stage to `not-started`, `round: 0/3`, with verdict cleared. Process
+    stages in dependency order through the normal generate-then-review loop;
+    reviewer points are required inputs. Reapprove the final gate before submission.
 13. Fill `response-to-reviewers.md`. Every point gets a row, including declined
-    ones with the reason. Then return to step 7.
+    ones with the reason. Then return to step 7 and add the next immutable version
+    tag for the revised package.
 
 ### On rejection — moving to another venue
 
@@ -89,7 +109,8 @@ python scripts/check_submissions.py --log submissions/submission-log.md
     If a point questions the contribution itself, re-run `novelty-check` before
     redrafting — a new venue with the same unaddressed weakness gets the same answer.
 16. Set `carried-forward: yes` on the closed attempt only once the points are
-    resolved in the draft. `check_submissions.py` refuses to let the next attempt
+    resolved in the draft. If there were no reviewer points, record
+    `no-feedback-reason`. `check_submissions.py` refuses to let the next attempt
     open until this is set, which is deliberate.
 17. Stop for the **venue-change user gate**: the user chooses the next venue.
     Then open attempt `NN+1` from step 2.

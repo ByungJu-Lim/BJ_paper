@@ -19,7 +19,15 @@ Sections declare what they carry with one comment line under the heading:
 import argparse
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from urllib.parse import unquote
+
+if __package__:
+    from .validation_common import expand_paths, visible_markdown
+    from .check_paper_state import parse_stages, validate_all as validate_state
+else:
+    from validation_common import expand_paths, visible_markdown
+    from check_paper_state import parse_stages, validate_all as validate_state
 
 DEFAULT_BRIEF_PATH = Path("docs/notes/story-brief.md")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
@@ -158,7 +166,7 @@ def validate_claims(brief: dict) -> list[str]:
         falsifier = brief["falsifiers"].get(claim_id)
         if falsifier is None:
             errors.append(f"{claim_id}: no falsifier recorded")
-        elif status in {"supported", "refuted"} and is_placeholder(falsifier):
+        elif (status in {"supported", "refuted"} or not is_placeholder(claim["claim"])) and is_placeholder(falsifier):
             errors.append(f"{claim_id}: status '{status}' requires a written falsifier")
 
     unknown_falsifiers = sorted(set(brief["falsifiers"]) - seen)
@@ -172,31 +180,135 @@ def _registry_keys(registry_path: Path) -> set[str]:
     data = json.loads(registry_path.read_text(encoding="utf-8"))
     if not isinstance(data, list):
         raise ValueError("retrieved-sources registry must be a JSON array")
-    return {entry["key"] for entry in data if isinstance(entry, dict) and entry.get("key")}
+    keys: set[str] = set()
+    for entry in data:
+        if not isinstance(entry, dict) or not isinstance(entry.get('key'), str) or not entry['key'].strip():
+            raise ValueError('source registry entries must contain nonempty keys')
+        if entry['key'] in keys:
+            raise ValueError(f"duplicate registry key: {entry['key']}")
+        keys.add(entry['key'])
+    return keys
 
 
-def validate_evidence(brief: dict, registry_path: Path | None, processed_dir: Path) -> list[str]:
+def _project_file(value: object, root: Path) -> Path | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    path = Path(value)
+    windows = PureWindowsPath(value)
+    if path.is_absolute() or windows.is_absolute() or windows.drive or '..' in windows.parts:
+        return None
+    resolved = (root / path).resolve()
+    return resolved if resolved.is_relative_to(root.resolve()) and resolved.is_file() else None
+
+
+def validate_manifest(manifest: Path, run_id: str, root: Path, processed_dir: Path) -> list[str]:
+    """Resolve reproducibility fields without executing the recorded command."""
+    if not manifest.is_file():
+        return [f"run:{run_id} has no manifest at {manifest}"]
+    try:
+        data = json.loads(manifest.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        return [f"{manifest}: invalid manifest: {exc}"]
+    if not isinstance(data, dict):
+        return [f"{manifest}: manifest must be an object"]
+    errors: list[str] = []
+    if data.get('run_id') != run_id:
+        errors.append(f"{manifest}: run_id must equal {run_id}")
+    script = _project_file(data.get('script'), root)
+    if script is None or not script.is_relative_to((root / 'code').resolve()):
+        errors.append(f"{manifest}: script must name an existing file under code/")
+    for field in ('command', 'python_version'):
+        if not isinstance(data.get(field), str) or not data[field].strip():
+            errors.append(f"{manifest}: {field} must be a nonempty string")
+    if 'random_seed' not in data or (data['random_seed'] is not None and type(data['random_seed']) is not int):
+        errors.append(f"{manifest}: random_seed must be an integer or null")
+    dependencies = data.get('dependencies')
+    if not isinstance(dependencies, dict) or not all(
+        isinstance(k, str) and k.strip() and isinstance(v, str) and v.strip()
+        for k, v in dependencies.items()
+    ):
+        errors.append(f"{manifest}: dependencies must map package names to versions")
+    for field in ('inputs', 'outputs'):
+        values = data.get(field)
+        if not isinstance(values, list) or not values:
+            errors.append(f"{manifest}: {field} must be a nonempty list of project files")
+            continue
+        for value in values:
+            path = _project_file(value, root)
+            if path is None:
+                errors.append(f"{manifest}: {field} file missing or outside project: {value}")
+            elif field == 'outputs' and (not path.is_relative_to(processed_dir.resolve()) or path == manifest.resolve()):
+                errors.append(f"{manifest}: output must be a result file under data/processed/: {value}")
+    return errors
+
+
+def _figure_id(text: str) -> str:
+    match = re.match(r'^(Fig\.?|Figure|Table|Tab\.?)\s*(\d+[a-z]?)', text, re.IGNORECASE)
+    assert match
+    kind = 'table' if match.group(1).lower().startswith('tab') else 'figure'
+    return f'{kind} {match.group(2).lower()}'
+
+
+def _rendered_evidence(section_paths: list[Path], root: Path) -> tuple[set[str], list[str]]:
+    """A caption must be followed by a local image or a Markdown table."""
+    found: set[str] = set()
+    errors: list[str] = []
+    for section in section_paths:
+        lines = [line.strip() for line in visible_markdown(section.read_text(encoding='utf-8')).splitlines() if line.strip()]
+        for index, line in enumerate(lines):
+            caption = re.match(r'^(?:Fig\.?|Figure|Table|Tab\.?)\s*\d+[a-z]?[.:]\s+\S', line, re.IGNORECASE)
+            if not caption:
+                continue
+            label = _figure_id(line)
+            following = lines[index + 1: index + 4]
+            valid = False
+            if label.startswith('figure') and following:
+                image = re.fullmatch(r'!\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))(?:\s+"[^"]*")?\)', following[0])
+                if image:
+                    value = unquote(image.group(1) or image.group(2))
+                    target = (section.parent / value).resolve()
+                    valid = target.is_relative_to(root.resolve()) and target.is_file() and target.stat().st_size > 0
+            elif label.startswith('table') and len(following) == 3:
+                valid = following[0].startswith('|') and bool(TABLE_DIVIDER_RE.fullmatch(following[1])) and following[2].startswith('|')
+            if valid:
+                if label in found:
+                    errors.append(f'{section}: duplicate evidence caption {label}')
+                found.add(label)
+    return found, errors
+
+
+def validate_evidence(brief: dict, registry_path: Path | None, processed_dir: Path,
+                      section_paths: list[Path] | None = None, project_root: Path | None = None) -> list[str]:
     """Invariant D: every evidence entry names something that actually exists."""
     errors: list[str] = []
-    keys = _registry_keys(registry_path) if registry_path and registry_path.exists() else None
+    root = (project_root or Path.cwd()).resolve()
+    keys: set[str] = set()
+    if registry_path is not None:
+        try:
+            keys = _registry_keys(registry_path)
+        except (OSError, ValueError) as exc:
+            errors.append(f"source registry cannot be read: {exc}")
+    rendered, figure_errors = _rendered_evidence(section_paths or [], root)
+    errors.extend(figure_errors)
 
     for claim in brief["claims"]:
         for entry in parse_evidence(claim["evidence"]):
             source_match = SOURCE_EVIDENCE_RE.match(entry)
             if source_match:
                 key = source_match.group("key")
-                if keys is not None and key not in keys:
+                if key not in keys:
                     errors.append(f"{claim['id']}: evidence '@{key}' is not in the source registry")
                 continue
 
             run_match = RUN_EVIDENCE_RE.match(entry)
             if run_match:
                 manifest = processed_dir / f"{run_match.group('run_id')}.manifest.json"
-                if not manifest.exists():
-                    errors.append(f"{claim['id']}: evidence '{entry}' has no manifest at {manifest}")
+                errors.extend(f"{claim['id']}: {error}" for error in validate_manifest(manifest, run_match.group('run_id'), root, processed_dir))
                 continue
 
             if FIGURE_EVIDENCE_RE.match(entry):
+                if _figure_id(entry) not in rendered:
+                    errors.append(f"{claim['id']}: evidence '{entry}' has no rendered figure/table with a caption in the sections")
                 continue
 
             errors.append(
@@ -208,7 +320,7 @@ def validate_evidence(brief: dict, registry_path: Path | None, processed_dir: Pa
 
 
 def extract_section_claims(section_path: Path) -> set[str]:
-    text = section_path.read_text(encoding="utf-8")
+    text = visible_markdown(section_path.read_text(encoding="utf-8"), keep_comments=True)
     claim_ids: set[str] = set()
     for match in SECTION_CLAIMS_RE.finditer(text):
         for token in re.split(r"[,\s]+", match.group("ids")):
@@ -228,7 +340,16 @@ def validate_sections(brief: dict, section_paths: list[Path], require_coverage: 
     covered: set[str] = set()
 
     for section_path in section_paths:
+        text = section_path.read_text(encoding='utf-8')
+        declarations = list(SECTION_CLAIMS_RE.finditer(visible_markdown(text, keep_comments=True)))
+        content = [line.strip() for line in visible_markdown(text).splitlines()
+                   if line.strip() and not line.lstrip().startswith('#')]
+        scaffold = not content
         declared = extract_section_claims(section_path)
+        if (not scaffold or require_coverage) and (len(declarations) != 1 or not declared):
+            errors.append(f'{section_path}: written sections require exactly one nonempty claims declaration')
+        if require_coverage and scaffold:
+            errors.append(f'{section_path}: final sections must contain manuscript prose')
         covered |= declared
 
         orphans = sorted(declared - set(status_by_id))
@@ -269,8 +390,13 @@ def validate_all(
     brief = parse_brief(brief_path)
     errors = validate_narrative(brief, required_slots)
     errors.extend(validate_claims(brief))
-    errors.extend(validate_evidence(brief, registry_path, processed_dir))
+    if required_slots and (not brief['claims'] or any(is_placeholder(c['claim']) for c in brief['claims'])):
+        errors.append('claims: required research stage must contain written claims, not placeholders')
+    errors.extend(validate_evidence(brief, registry_path, processed_dir, section_paths))
     errors.extend(validate_sections(brief, section_paths, require_coverage))
+    if not is_placeholder(dict(brief['slots']).get('Finding', '')):
+        if not any(RUN_EVIDENCE_RE.fullmatch(entry) for c in brief['claims'] for entry in parse_evidence(c['evidence'])):
+            errors.append('Finding: a written result requires run:<run-id> evidence in the claims ledger')
     return errors
 
 
@@ -297,6 +423,8 @@ def main() -> int:
         help="retrieved-sources registry used to resolve @key evidence",
     )
     parser.add_argument("--processed-dir", type=Path, default=DEFAULT_PROCESSED_DIR)
+    parser.add_argument('--state', type=Path, help='Derive artifact requirements from workflow review/approval state')
+    parser.add_argument('--check-manifests', action='store_true', help='Require and validate all processed run manifests')
     parser.add_argument(
         "--require-coverage",
         action="store_true",
@@ -309,14 +437,36 @@ def main() -> int:
     else:
         required_slots = [slot.strip() for slot in args.require_slots.split(",") if slot.strip()]
 
-    errors = validate_all(
-        args.brief,
-        args.sections,
-        required_slots,
-        args.registry,
-        args.processed_dir,
-        args.require_coverage,
-    )
+    try:
+        if args.state:
+            state_errors = validate_state(args.state)
+            if state_errors:
+                raise ValueError('invalid workflow state: ' + '; '.join(e for group in state_errors.values() for e in group))
+            completed = {s['id'] for s in parse_stages(args.state) if s['status'] in {'approved', 'awaiting-user'}}
+            if 'story-brief' in completed:
+                required_slots = list(dict.fromkeys(required_slots + ['Context', 'Gap', 'Question']))
+            if 'outline-draft' in completed:
+                required_slots = list(dict.fromkeys(required_slots + ['Approach']))
+            if 'results-discussion' in completed:
+                required_slots = list(NARRATIVE_SLOTS)
+            if 'code-experiment' in completed:
+                args.check_manifests = True
+            if 'polish-review' in completed:
+                required_slots = list(NARRATIVE_SLOTS)
+                args.require_coverage = True
+        sections = expand_paths(args.sections)
+        if args.require_coverage and not sections:
+            raise ValueError('final coverage requires section files')
+        errors = validate_all(args.brief, sections, required_slots,
+                              args.registry, args.processed_dir, args.require_coverage)
+        if args.check_manifests:
+            manifests = sorted(args.processed_dir.glob('*.manifest.json'))
+            if not manifests:
+                errors.append('code-experiment: at least one run manifest is required')
+            for manifest in manifests:
+                errors.extend(validate_manifest(manifest, manifest.name.removesuffix('.manifest.json'), Path.cwd(), args.processed_dir))
+    except (OSError, ValueError) as exc:
+        errors = [str(exc)]
 
     if errors:
         print("story-brief.md validation errors:")

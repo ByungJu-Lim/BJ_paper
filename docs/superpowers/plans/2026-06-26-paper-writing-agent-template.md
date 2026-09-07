@@ -1,5 +1,9 @@
 # Paper-Writing Agent Template Implementation Plan
 
+> Historical implementation plan. Current behavior is defined by CLAUDE.md,
+> active skills and tested validators. See 2026-09-07-review-fixes.md for the
+> later corrections; do not reapply this plan over those changes.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a reusable Claude Code project template (skills + scaffolding) for writing English-language engineering/energy research papers, ready to be pushed to Gitea as a Template Repository.

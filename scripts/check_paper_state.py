@@ -15,12 +15,22 @@ REQUIRED_STAGE_IDS = (
     "lit-review",
     "novelty-check",
     "outline-draft",
-    "results-discussion",
     "code-experiment",
+    "results-discussion",
     "figures-tables",
     "citation-manage",
     "polish-review",
 )
+STAGE_DEPENDENCIES = {
+    "lit-review": ("story-brief",),
+    "novelty-check": ("lit-review",),
+    "outline-draft": ("novelty-check",),
+    "code-experiment": ("outline-draft",),
+    "results-discussion": ("code-experiment",),
+    "figures-tables": ("code-experiment",),
+    "citation-manage": ("results-discussion", "figures-tables"),
+    "polish-review": ("citation-manage",),
+}
 
 
 def parse_stages(state_path: Path) -> list[dict]:
@@ -41,6 +51,8 @@ def parse_stages(state_path: Path) -> list[dict]:
                 "verified-sources": None,
                 "last-critic-issues": [],
                 "rejected-citations": [],
+                "_field-errors": [],
+                "_seen-scalar-fields": set(),
             }
             list_field = None
             continue
@@ -54,6 +66,11 @@ def parse_stages(state_path: Path) -> list[dict]:
             value = field_match.group("value").strip()
             list_field = key if key in LIST_FIELDS else None
             if key in TRACKED_SCALAR_FIELDS:
+                if key in current["_seen-scalar-fields"]:
+                    current["_field-errors"].append(
+                        f"{current['id']}: duplicate scalar field '{key}'"
+                    )
+                current["_seen-scalar-fields"].add(key)
                 current[key] = value or None
             continue
 
@@ -80,7 +97,7 @@ ALLOWED_VERDICTS = {"pass", "revise"}
 
 
 def validate_stage(stage: dict) -> list[str]:
-    errors: list[str] = []
+    errors: list[str] = list(stage.get("_field-errors", []))
     stage_id = stage["id"]
 
     status = stage["status"]
@@ -90,7 +107,9 @@ def validate_stage(stage: dict) -> list[str]:
     current_round = None
     max_round = None
     round_value = stage["round"]
-    if round_value:
+    if not round_value:
+        errors.append(f"{stage_id}: round is required")
+    else:
         round_match = re.match(r"^(\d+)/(\d+)$", round_value)
         if not round_match:
             errors.append(f"{stage_id}: invalid round format '{round_value}', expected 'n/3'")
@@ -101,6 +120,15 @@ def validate_stage(stage: dict) -> list[str]:
     if verdict is not None and verdict not in ALLOWED_VERDICTS:
         errors.append(f"{stage_id}: invalid last-critic-verdict '{verdict}'")
 
+    if status == "not-started" and verdict is not None:
+        errors.append(f"{stage_id}: status 'not-started' must not retain a critic verdict")
+    if status in {"approved", "awaiting-user"} and verdict != "pass":
+        errors.append(f"{stage_id}: status '{status}' requires last-critic-verdict 'pass'")
+    if status == "awaiting-review" and verdict is not None:
+        errors.append(f"{stage_id}: awaiting-review must not already have a critic verdict")
+    if status == 'not-started' and verdict is not None:
+        errors.append(f"{stage_id}: not-started must not retain a critic verdict")
+
     if current_round is not None and max_round is not None:
         if max_round != 3:
             errors.append(f"{stage_id}: round denominator must be 3 (got '{max_round}')")
@@ -108,14 +136,20 @@ def validate_stage(stage: dict) -> list[str]:
             errors.append(f"{stage_id}: round must be between 0 and {max_round}")
         if status == "not-started" and current_round != 0:
             errors.append(f"{stage_id}: status 'not-started' requires round 0/3")
+        if status == "awaiting-review" and current_round == 0:
+            errors.append(f"{stage_id}: awaiting-review requires at least one generation round")
+        if status in {"approved", "awaiting-user"} and current_round == 0:
+            errors.append(f"{stage_id}: status '{status}' requires at least one review round")
+        if status == 'awaiting-review' and current_round == 0:
+            errors.append(f"{stage_id}: awaiting-review requires a generated attempt (round >= 1)")
         if (
             current_round >= max_round
             and verdict == "revise"
-            and status not in {"escalated", "approved"}
+            and status != "escalated"
         ):
             errors.append(
                 f"{stage_id}: round {current_round}/{max_round} reached without "
-                f"status 'escalated' or 'approved' (got '{status}')"
+                f"status 'escalated' (got '{status}')"
             )
 
     errors.extend(validate_citation_bookkeeping(stage))
@@ -171,6 +205,22 @@ def validate_all(state_path: Path) -> dict[str, list[str]]:
         errors = validate_stage(stage)
         if errors:
             report.setdefault(stage["id"], []).extend(errors)
+
+    by_id = {stage["id"]: stage for stage in stages}
+    for stage_id, dependencies in STAGE_DEPENDENCIES.items():
+        stage = by_id.get(stage_id)
+        if stage is None or stage["status"] == "not-started":
+            continue
+        missing_approvals = [
+            dependency
+            for dependency in dependencies
+            if by_id.get(dependency, {}).get("status") != "approved"
+        ]
+        if missing_approvals:
+            report.setdefault(stage_id, []).append(
+                f"{stage_id}: status '{stage['status']}' requires approved prerequisites: "
+                f"{', '.join(missing_approvals)}"
+            )
     return report
 
 

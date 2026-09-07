@@ -1,5 +1,7 @@
 # 논문 작성 에이전트 템플릿 설계
 
+> 초기 설계 기록입니다. 현재 단계·승인·검증 계약은 `CLAUDE.md`, `.claude/skills/`, `scripts/`와 테스트를 따릅니다. 2026-09-07 검토에서 story-brief, 코드 선행 실행, 투고 버전 이력과 강화된 검증을 반영했습니다.
+
 - Status: Approved (design), pending implementation plan
 - Date: 2026-06-25
 

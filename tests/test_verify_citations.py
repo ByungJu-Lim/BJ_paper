@@ -7,6 +7,7 @@ from scripts.verify_citations import (
     extract_bibtex_keys,
     extract_citation_keys_from_markdown,
     extract_registry_keys,
+    find_bibliography_metadata_mismatches,
     find_citations_missing_from_bib,
     find_unregistered_bib_entries,
     find_unverified_citations,
@@ -66,6 +67,19 @@ class TestExtractBibtexKeys(unittest.TestCase):
             )
             self.assertEqual(extract_bibtex_keys(bib_path), {"smith2021boiler", "lee2022process"})
 
+    def test_same_line_entries_are_all_checked(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "refs.bib"
+            path.write_text("@article{one, title={One}} @article{two, title={Two}}", encoding="utf-8")
+            self.assertEqual(extract_bibtex_keys(path), {"one", "two"})
+
+    def test_duplicate_bibtex_key_is_rejected(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "refs.bib"
+            path.write_text("@article{one, title={One}} @article{one, title={Other}}", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate bibliography key"):
+                extract_bibtex_keys(path)
+
     def test_comment_only_file_returns_empty_set(self):
         with TemporaryDirectory() as tmp:
             bib_path = Path(tmp) / "references.bib"
@@ -106,6 +120,37 @@ class TestExtractCitationKeysFromMarkdown(unittest.TestCase):
                 extract_citation_keys_from_markdown(md_path),
                 {"smith2021boiler", "lee2022process"},
             )
+
+    def test_narrative_citations_are_detected(self):
+        with TemporaryDirectory() as tmp:
+            md_path = Path(tmp) / "section.md"
+            md_path.write_text(
+                "@smith2021boiler argues this, while -@lee2022process suppresses the author.",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                extract_citation_keys_from_markdown(md_path),
+                {"smith2021boiler", "lee2022process"},
+            )
+
+    def test_non_visible_and_non_citation_at_signs_are_ignored(self):
+        with TemporaryDirectory() as tmp:
+            md_path = Path(tmp) / "section.md"
+            md_path.write_text(
+                "\\@escaped and name@example.org are not citations.\n"
+                "`@inline2024` is code.\n"
+                "```markdown\n@fenced2025\n```\n"
+                "<!-- @commented2026 -->\n"
+                "Actual [@real2024].\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(extract_citation_keys_from_markdown(md_path), {"real2024"})
+
+    def test_malformed_citation_key_subset_is_ignored(self):
+        with TemporaryDirectory() as tmp:
+            md_path = Path(tmp) / "section.md"
+            md_path.write_text("Do not treat @ as a key, but keep @valid-2024_ok.", encoding="utf-8")
+            self.assertEqual(extract_citation_keys_from_markdown(md_path), {"valid-2024_ok"})
 
 
 class TestFindUnverifiedCitations(unittest.TestCase):
@@ -200,6 +245,80 @@ class TestBibliographyInvariants(unittest.TestCase):
                 "Claims [@real2024; @other2025] hold.\n",
             )
             self.assertEqual(find_citations_missing_from_bib([section_path], bib_path), {})
+
+
+class TestBibliographyMetadata(unittest.TestCase):
+    def write_registry_and_bib(self, tmp: str, entry: dict, bib: str) -> tuple[Path, Path]:
+        registry_path = Path(tmp) / "retrieved-sources.json"
+        registry_path.write_text(json.dumps([entry]), encoding="utf-8")
+        bib_path = Path(tmp) / "references.bib"
+        bib_path.write_text(bib, encoding="utf-8")
+        return registry_path, bib_path
+
+    def entry(self) -> dict:
+        return {
+            "key": "smith2024boiler",
+            "title": "Boiler Efficiency",
+            "url": "https://doi.org/10.1234/example",
+            "doi": "10.1234/example",
+            "retrieved_at": "2026-09-05",
+            "source_type": "journal-article",
+            "authors": ["Jane Smith", "Ji-Hoon Kim"],
+            "year": 2024,
+            "venue": "Applied Energy",
+        }
+
+    def test_matching_bibtex_metadata_passes(self):
+        with TemporaryDirectory() as tmp:
+            registry_path, bib_path = self.write_registry_and_bib(
+                tmp,
+                self.entry(),
+                "@article{smith2024boiler,\n"
+                "  title={Boiler Efficiency},\n"
+                "  doi={10.1234/example},\n"
+                "  year={2024},\n"
+                "  author={Smith, Jane and Kim, Ji-Hoon},\n"
+                "  journal={Applied Energy}\n"
+                "}\n",
+            )
+            self.assertEqual(find_bibliography_metadata_mismatches(bib_path, registry_path), [])
+
+    def test_missing_bibliographic_fields_are_rejected(self):
+        with TemporaryDirectory() as tmp:
+            registry, bib = self.write_registry_and_bib(tmp, self.entry(),
+                "@article{smith2024boiler, title={Boiler Efficiency}}")
+            errors = find_bibliography_metadata_mismatches(bib, registry)
+            self.assertTrue(any("required author" in error for error in errors))
+            self.assertTrue(any("required year" in error for error in errors))
+            self.assertTrue(any("required doi" in error for error in errors))
+            self.assertTrue(any("venue" in error for error in errors))
+
+    def test_same_surname_different_given_name_is_rejected(self):
+        with TemporaryDirectory() as tmp:
+            registry, bib = self.write_registry_and_bib(tmp, self.entry(),
+                "@article{smith2024boiler, title={Boiler Efficiency}, "
+                "author={John Smith and Ji-Hoon Kim}, year={2024}, "
+                "doi={10.1234/example}, journal={Applied Energy}}")
+            self.assertTrue(any("authors differ" in error for error in
+                find_bibliography_metadata_mismatches(bib, registry)))
+
+    def test_fabricated_bibtex_fields_are_reported(self):
+        with TemporaryDirectory() as tmp:
+            registry_path, bib_path = self.write_registry_and_bib(
+                tmp,
+                self.entry(),
+                "@article{smith2024boiler,\n"
+                "  title={Invented Title},\n"
+                "  doi={10.9999/fake},\n"
+                "  year={2099},\n"
+                "  author={Doe, John}\n"
+                "}\n",
+            )
+            errors = find_bibliography_metadata_mismatches(bib_path, registry_path)
+            self.assertTrue(any("title differs" in error for error in errors))
+            self.assertTrue(any("DOI differs" in error for error in errors))
+            self.assertTrue(any("year differs" in error for error in errors))
+            self.assertTrue(any("authors differ" in error for error in errors))
 
 
 if __name__ == "__main__":

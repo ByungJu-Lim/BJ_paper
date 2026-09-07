@@ -43,8 +43,7 @@ Three mechanisms enforce it:
    falsifier line. A claim with no falsifier is not a claim, it is an opinion.
 3. Run the check:
    ```bash
-   python scripts/verify_story_brief.py --require-slots Context,Gap,Question \
-     --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md
+   python scripts/verify_story_brief.py --require-slots Context,Gap,Question --registry docs/notes/retrieved-sources.json --sections "docs/sections/*.md"
    ```
 4. Fill in `CLAUDE.md`'s **가제** from the `Question` slot. Leave **목표 학술지**
    until `Finding` exists — the size of the finding picks the venue, not the
@@ -59,7 +58,7 @@ Three mechanisms enforce it:
 |---|---|
 | `lit-review` | Sharpen `Gap` against what actually exists. Move claims to `supported` with `@key` evidence, or to `refuted`. |
 | `novelty-check` | If the novelty matrix shows the `Gap` is already filled, the `Gap` sentence is wrong — rewrite it before drafting. |
-| `outline-draft` | Add a `<!-- claims: C1, C3 -->` line under each section heading, mapping the argument onto the structure. Fill `Approach`. |
+| `outline-draft` | Map planned claims in the outline, then add declarations to the drafted Introduction/Related Work/Methods. Keep result sections as scaffold. Fill `Approach`. |
 | `code-experiment` | Nothing yet — but check the planned runs can actually decide the falsifiers. If none can, the experiment is not answering the paper's question. |
 | `results-discussion` | Fill `Finding` and `Implication` from `data/processed/`. Flip claim statuses with `run:<run-id>` evidence. A `refuted` claim means rewriting the narrative slot that rested on it. |
 | `polish-review` | Run with `--require-slots all --require-coverage`. Every slot filled, every live claim carried by some section. |

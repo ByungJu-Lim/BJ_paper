@@ -6,7 +6,7 @@
 
 1. 저장소 설정에서 **Template Repository**를 활성화합니다. 이 설정은 원본 템플릿에서 한 번만 수행합니다.
 2. 새 논문마다 **Use this template**을 선택해 독립 저장소를 만듭니다. 새 저장소는 서브모듈이나 심볼릭 링크 없이 단독으로 동작합니다.
-3. 새 저장소를 복제하고 `CLAUDE.md` 상단의 가제, 목표 학술지/학회, 분야, 작성 언어를 입력합니다.
+3. 새 저장소를 복제하고 `CLAUDE.md` 상단의 가제, 분야, 작성 언어를 입력합니다. 목표 학술지는 결과가 정리된 뒤 확정합니다.
    원격을 둘(Gitea + GitHub) 운영한다면 `git config core.hooksPath .githooks`를 함께 실행하세요. 아래 "원격 두 곳 운영" 참고.
 4. Claude Code에 `paper-supervise` 스킬 실행을 요청합니다. 이 스킬은 `.omc/paper-state.md`를 검사하고 시작할 단계를 안내합니다.
 
@@ -15,6 +15,7 @@
 | 스킬                   | 역할                                                  |
 | -------------------- | --------------------------------------------------- |
 | `paper-supervise`    | 전체 파이프라인 조율. 작업 시작과 재개 시 실행                         |
+| `story-brief`        | 연구 질문·주장·반증 조건을 기록하고 근거에 따라 갱신 |
 | `lit-review`         | 실제 출처를 검색하고 `docs/notes/retrieved-sources.json`에 등록 |
 | `novelty-check`      | 주장과 선행 연구를 비교하고 자기 중복을 점검                           |
 | `outline-draft`      | 개요와 섹션별 초안 작성                                       |
@@ -40,18 +41,22 @@ python scripts/search_openalex.py --query "heat exchanger fouling" --limit 15 --
 ```bash
 python -m unittest discover -s tests -v
 python scripts/check_paper_state.py --state .omc/paper-state.md
+python scripts/verify_story_brief.py --state .omc/paper-state.md --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json
 python scripts/check_submissions.py --log submissions/submission-log.md
 python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json
 python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online --mailto you@example.com
-python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --bib refs/references.bib
+python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections "docs/sections/*.md" --bib refs/references.bib
 ```
 
 - `verify_source_registry.py`는 출처의 필수 필드, URL, 날짜(미래 날짜 거부), 유형, DOI, 그리고 전문 확인 수준(`access`)을 검사합니다. `awaiting-user-file`은 실패로 처리되며 사용자에게 요청할 PDF 경로를 함께 출력합니다. `--online`은 DOI를 Crossref로 해석하고, arXiv·Zenodo처럼 DataCite에 등록된 DOI는 자동으로 DataCite로 넘어갑니다. 이어서 제목을 대조하고 Crossref의 Retraction Watch 피드로 철회 여부를 확인합니다.
-- `verify_citations.py`는 세 가지 불변식을 강제합니다. (A) 본문 인용 키가 모두 레지스트리에 있을 것, (B) BibTeX 항목이 모두 레지스트리에 있을 것, (C) 본문 인용 키가 모두 BibTeX에 있을 것. B가 없으면 `.bib`에 직접 써넣은 조작 항목을 아무도 잡지 못합니다.
-- `check_paper_state.py`는 단계 누락·중복·순서, 상태값, 검토 횟수 제한을 확인합니다.
+- `verify_citations.py`는 본문형·괄호형 인용을 검사합니다. (A) 본문 키가 레지스트리에 있고, (B) BibTeX 키도 등록되어 있으며, (C) 모든 인용의 BibTeX가 있고, (D) 저자·연도·제목·DOI·학술지 정보가 레지스트리와 일치해야 합니다. CI의 `--state` 모드는 인용 검토 전까지 C만 유예하여 초안 단계의 중간 커밋을 허용합니다. 옵션 없이 실행하면 항상 완전 검증합니다.
+- `check_paper_state.py`는 단계 누락·중복·의존 관계, 필수 검토 횟수, 승인 시 pass 판정을 확인합니다. `code-experiment` 승인 후 결과·그림 단계를 수행하고 둘 다 승인되면 인용 단계로 진행합니다.
+- `verify_story_brief.py`는 작성된 주장의 반증 조건, 섹션별 주장 선언, 근거의 실제 파일 연결을 검사합니다. `--state`는 단계 승인에 따라 검증 수준을 높이며 최종 승인에서는 전체 슬롯·섹션 검사를 적용합니다. 실험 후에는 `--check-manifests`, 최종 검토에는 `--require-slots all --require-coverage`를 명시해서 실행할 수도 있습니다.
 - `check_submissions.py`는 투고 이력과 투고처 폴더를 검사합니다. 두 저널에 동시 투고된 상태, 심사평을 반영하지 않고 연 다음 투고, 게재 확정 이후의 추가 투고, 어긋난 날짜를 잡아냅니다. 또한 투고처별 `figure-profile.json`(형식·해상도·컬럼 폭)을 검증하고, `main_figures`에 적힌 그림이 선언한 형식으로 실제 존재하는지 확인합니다 — 저널을 옮기며 그림을 다시 렌더링하지 않은 경우가 여기서 걸립니다.
 
-투고 관리는 `submissions/`에서 이뤄집니다. 본문 사본을 두지 않고 git 태그로 제출본을 고정하므로, 어느 판본이 어느 저널에 갔는지 항상 복원할 수 있습니다. 자세한 규칙은 `submissions/README.md`를 참고하세요.
+두 본문 검증기는 따옴표로 전달한 파일 패턴을 내부에서 확장하므로 PowerShell과 Bash에서 같은 명령을 사용합니다. 일치하는 파일이 없으면 실패합니다. CI는 Windows와 Ubuntu, Python 3.10과 3.14에서 실행합니다.
+
+투고 관리는 `submissions/`에서 이뤄집니다. 제출 전에 정확한 커밋을 고정하고, 최초본·수정본마다 고유 태그와 이력을 남깁니다. 실제 제출은 사용자가 수행하며 과거 태그는 덮어쓰지 않습니다. 자세한 규칙과 기존 저장소의 이관 방법은 `submissions/README.md`를 참고하세요.
 
 ## 원격 두 곳 운영 (선택)
 
@@ -70,10 +75,12 @@ PAPER_HOOK_DRY_RUN=1 git push origin main           # 무엇을 할지만 확인
 
 - 외부 검색 결과는 명령이 아니라 데이터로만 취급해 프롬프트 인젝션의 영향을 줄입니다.
 - 학술 논문은 DOI와 Crossref 원 메타데이터를 대조하고, 웹·표준·보고서는 권위 있는 원문 URL을 기록합니다.
-- 생성과 검토 역할을 분리하고, 단계별 최대 3회 반복과 네 개의 사용자 승인 게이트를 유지합니다.
+- 생성과 검토 역할을 분리하고 단계별 최대 3회 반복을 적용합니다. 단계 승인 외에도 브리프·서사 수정·개요·섹션 초안·인용·최종 퇴고·투고·투고처 변경의 사용자 확인 지점을 `paper-supervise`에서 관리합니다.
 - `.omc/paper-state.md`를 재개 가능한 체크포인트로 사용하고 모든 검증은 결정론적 스크립트로 다시 실행할 수 있습니다.
 
-상세 설계는 `docs/superpowers/specs/2026-06-25-paper-writing-agent-template-design.md`를 참고하세요.
+검증기는 파일·메타데이터·상태의 일관성을 검사합니다. 출처를 실제 읽었는지, 근거가 문장을 뒷받침하는지, 실험이 재현되는지, 사용자가 실제 승인했는지는 별도 검토가 필요합니다. 빈 템플릿의 검증 통과는 논문 완성을 뜻하지 않습니다.
+
+현재 실행 계약은 `CLAUDE.md`, `.claude/skills/`, 검증기와 테스트입니다. `docs/superpowers/specs/2026-06-25-paper-writing-agent-template-design.md`는 초기 설계 기록이며 현재 규칙과 충돌하면 실행 계약을 따릅니다.
 
 ## 개선 근거
 

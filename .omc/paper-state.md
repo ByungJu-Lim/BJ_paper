@@ -24,13 +24,13 @@ round: 0/3
 last-critic-verdict:
 last-critic-issues:
 
-## Stage: results-discussion
+## Stage: code-experiment
 status: not-started
 round: 0/3
 last-critic-verdict:
 last-critic-issues:
 
-## Stage: code-experiment
+## Stage: results-discussion
 status: not-started
 round: 0/3
 last-critic-verdict:

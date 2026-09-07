@@ -1,3 +1,3 @@
 # Results
 
-> Drafted by the `results-discussion` skill from `data/processed/`.
+<!-- Drafted by results-discussion from data/processed/. -->

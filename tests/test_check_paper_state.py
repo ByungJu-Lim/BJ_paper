@@ -11,6 +11,50 @@ def write_state(tmp_dir: str, content: str) -> Path:
     return state_path
 
 
+def stage_block(
+    stage_id: str,
+    status: str = "not-started",
+    round_value: str = "0/3",
+    verdict: str = "",
+    extra: str = "",
+) -> str:
+    return (
+        f"## Stage: {stage_id}\n"
+        f"status: {status}\n"
+        f"round: {round_value}\n"
+        f"last-critic-verdict: {verdict}\n"
+        "last-critic-issues:\n"
+        f"{extra}"
+    )
+
+
+def valid_state(**overrides: dict) -> str:
+    stages = [
+        "story-brief",
+        "lit-review",
+        "novelty-check",
+        "outline-draft",
+        "code-experiment",
+        "results-discussion",
+        "figures-tables",
+        "citation-manage",
+        "polish-review",
+    ]
+    blocks = []
+    for stage_id in stages:
+        fields = {
+            "status": "not-started",
+            "round_value": "0/3",
+            "verdict": "",
+            "extra": "",
+        }
+        fields.update(overrides.get(stage_id, {}))
+        if stage_id == "citation-manage":
+            fields["extra"] += "verified-sources: 0\nrejected-citations:\n"
+        blocks.append(stage_block(stage_id, **fields))
+    return "# Paper State\n\n" + "\n".join(blocks)
+
+
 class TestParseStages(unittest.TestCase):
     def test_parses_single_stage_scalar_fields(self):
         with TemporaryDirectory() as tmp:
@@ -84,6 +128,12 @@ class TestParseStages(unittest.TestCase):
 
 
 class TestValidateStage(unittest.TestCase):
+    def test_pending_states_cannot_claim_impossible_review_history(self):
+        for status, verdict in [('not-started', 'pass'), ('awaiting-review', None)]:
+            with self.subTest(status=status):
+                self.assertTrue(validate_stage({'id': 'story-brief', 'status': status,
+                    'round': '0/3', 'last-critic-verdict': verdict, 'last-critic-issues': []}))
+
     def test_valid_stage_has_no_errors(self):
         stage = {
             "id": "outline-draft",
@@ -128,7 +178,7 @@ class TestValidateStage(unittest.TestCase):
         }
         errors = validate_stage(stage)
         self.assertEqual(len(errors), 1)
-        self.assertIn("reached without status 'escalated' or 'approved'", errors[0])
+        self.assertIn("reached without status 'escalated'", errors[0])
 
     def test_round_exceeded_with_escalated_status_passes(self):
         stage = {
@@ -172,6 +222,26 @@ class TestValidateStage(unittest.TestCase):
         }
         self.assertTrue(any("not-started" in error for error in validate_stage(stage)))
 
+    def test_not_started_stage_must_not_retain_verdict(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "not-started",
+            "round": "0/3",
+            "last-critic-verdict": "pass",
+            "last-critic-issues": [],
+        }
+        self.assertTrue(any("must not retain a critic verdict" in error for error in validate_stage(stage)))
+
+    def test_awaiting_review_requires_review_round(self):
+        stage = {
+            "id": "outline-draft",
+            "status": "awaiting-review",
+            "round": "0/3",
+            "last-critic-verdict": None,
+            "last-critic-issues": [],
+        }
+        self.assertTrue(any("requires at least one generation round" in error for error in validate_stage(stage)))
+
 
 class TestValidateAll(unittest.TestCase):
     def test_returns_only_stages_with_errors(self):
@@ -194,8 +264,8 @@ class TestValidateAll(unittest.TestCase):
                 "last-critic-verdict:\n"
                 "last-critic-issues:\n\n"
                 "## Stage: outline-draft\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
-                "## Stage: results-discussion\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: code-experiment\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: results-discussion\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: figures-tables\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: citation-manage\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\n"
                 "last-critic-issues:\nverified-sources: 0\nrejected-citations:\n\n"
@@ -219,6 +289,126 @@ class TestValidateAll(unittest.TestCase):
             self.assertTrue(any("duplicate" in error for error in errors))
             self.assertTrue(any("missing" in error for error in errors))
             self.assertTrue(any("order" in error for error in errors))
+
+    def test_approved_without_round_or_verdict_is_flagged(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                valid_state(
+                    **{
+                        "story-brief": {
+                            "status": "approved",
+                            "round_value": "",
+                            "verdict": "",
+                        }
+                    }
+                ),
+            )
+            errors = validate_all(state_path)["story-brief"]
+            self.assertTrue(any("round is required" in error for error in errors))
+            self.assertTrue(any("requires last-critic-verdict 'pass'" in error for error in errors))
+
+    def test_approved_after_revise_at_max_round_is_flagged(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                valid_state(
+                    **{
+                        "story-brief": {
+                            "status": "approved",
+                            "round_value": "3/3",
+                            "verdict": "revise",
+                        }
+                    }
+                ),
+            )
+            errors = validate_all(state_path)["story-brief"]
+            self.assertTrue(any("requires last-critic-verdict 'pass'" in error for error in errors))
+            self.assertTrue(any("reached without status 'escalated'" in error for error in errors))
+
+    def test_downstream_stage_requires_approved_prerequisites(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                valid_state(
+                    **{
+                        "story-brief": {
+                            "status": "in-progress",
+                            "round_value": "2/3",
+                            "verdict": "revise",
+                        },
+                        "lit-review": {
+                            "status": "approved",
+                            "round_value": "1/3",
+                            "verdict": "pass",
+                        },
+                    }
+                ),
+            )
+            errors = validate_all(state_path)["lit-review"]
+            self.assertTrue(any("requires approved prerequisites: story-brief" in error for error in errors))
+
+    def test_results_and_figures_depend_on_code_experiment(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                valid_state(
+                    **{
+                        "story-brief": {
+                            "status": "approved",
+                            "round_value": "1/3",
+                            "verdict": "pass",
+                        },
+                        "lit-review": {
+                            "status": "approved",
+                            "round_value": "1/3",
+                            "verdict": "pass",
+                        },
+                        "novelty-check": {
+                            "status": "approved",
+                            "round_value": "1/3",
+                            "verdict": "pass",
+                        },
+                        "outline-draft": {
+                            "status": "approved",
+                            "round_value": "1/3",
+                            "verdict": "pass",
+                        },
+                        "results-discussion": {
+                            "status": "awaiting-user",
+                            "round_value": "1/3",
+                            "verdict": "pass",
+                        },
+                        "figures-tables": {
+                            "status": "awaiting-review",
+                            "round_value": "1/3",
+                            "verdict": "",
+                        },
+                    }
+                ),
+            )
+            report = validate_all(state_path)
+            self.assertTrue(
+                any("requires approved prerequisites: code-experiment" in error for error in report["results-discussion"])
+            )
+            self.assertTrue(
+                any("requires approved prerequisites: code-experiment" in error for error in report["figures-tables"])
+            )
+
+    def test_duplicate_scalar_fields_are_flagged(self):
+        with TemporaryDirectory() as tmp:
+            state_path = write_state(
+                tmp,
+                "## Stage: story-brief\n"
+                "status: not-started\n"
+                "status: approved\n"
+                "round: 0/3\n"
+                "last-critic-verdict: pass\n"
+                "last-critic-issues:\n",
+            )
+            self.assertTrue(
+                any("duplicate scalar field 'status'" in error for error in validate_all(state_path)["story-brief"])
+            )
 
 
 class TestCitationBookkeeping(unittest.TestCase):

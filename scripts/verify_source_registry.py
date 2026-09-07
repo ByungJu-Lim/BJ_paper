@@ -30,6 +30,7 @@ ALLOWED_SOURCE_TYPES = {
 }
 # Source types that are not trustworthy as citations without a resolvable DOI.
 DOI_SOURCE_TYPES = {"journal-article", "conference-paper", "preprint"}
+VENUE_SOURCE_TYPES = {"journal-article", "conference-paper", "preprint"}
 # update-to types that make a source unsafe to cite without explicit acknowledgement.
 BLOCKING_UPDATE_TYPES = {
     "retraction",
@@ -64,6 +65,80 @@ def normalize_doi(value: str) -> str:
 
 def normalize_title(value: str) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", value.casefold()).split())
+
+
+def normalize_update_type(value: str) -> str:
+    return re.sub(r"[\s_-]+", "_", value.strip().casefold())
+
+
+def normalize_author_name(value: str) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", value.casefold()).split())
+
+
+def author_names(authors: object) -> list[str]:
+    """Canonicalize full names, including family-first metadata and Unicode."""
+    if not isinstance(authors, list):
+        return []
+    names = []
+    for author in authors:
+        if not isinstance(author, str) or not author.strip():
+            continue
+        if "," in author:
+            family, given = author.split(",", 1)
+            author = given + " " + family
+        names.append(normalize_author_name(author))
+    return names
+
+
+def _metadata_authors(metadata: dict) -> list[str]:
+    names: list[str] = []
+    for author in metadata.get("author") or []:
+        if not isinstance(author, dict):
+            continue
+        given = str(author.get("given", "")).strip()
+        family = str(author.get("family", "")).strip()
+        literal = str(author.get("name", "")).strip()
+        name = " ".join(part for part in (given, family) if part) or literal
+        if name:
+            names.append(name)
+    if names:
+        return names
+
+    for creator in metadata.get("creators") or []:
+        if isinstance(creator, dict):
+            name = str(creator.get("name", "")).strip()
+            if name:
+                names.append(name)
+    return names
+
+
+def _metadata_year(metadata: dict) -> int | None:
+    for key in (
+        "published-print",
+        "published-online",
+        "published",
+        "issued",
+    ):
+        date_parts = (metadata.get(key) or {}).get("date-parts")
+        try:
+            year = date_parts[0][0]
+        except (TypeError, IndexError):
+            continue
+        if isinstance(year, int):
+            return year
+    year = metadata.get("publicationYear") or metadata.get("publication_year")
+    return year if isinstance(year, int) else None
+
+
+def _metadata_venue(metadata: dict) -> str:
+    for key in ("container-title", "event"):
+        value = metadata.get(key)
+        if isinstance(value, list) and value and isinstance(value[0], str):
+            return value[0]
+        if isinstance(value, str):
+            return value
+    publisher = metadata.get("publisher")
+    return publisher if isinstance(publisher, str) else ""
 
 
 def _user_agent(mailto: str | None) -> str:
@@ -102,7 +177,18 @@ def fetch_datacite_metadata(doi: str, mailto: str | None = None) -> dict:
     url = f"https://api.datacite.org/dois/{quote(doi, safe='')}"
     attributes = _get_json(url, mailto)["data"]["attributes"]
     titles = [t.get("title", "") for t in attributes.get("titles", []) if t.get("title")]
-    return {"DOI": attributes.get("doi", ""), "title": titles}
+    creators = [
+        {"name": creator.get("name", "")}
+        for creator in attributes.get("creators", [])
+        if creator.get("name")
+    ]
+    return {
+        "DOI": attributes.get("doi", ""),
+        "title": titles,
+        "creators": creators,
+        "publicationYear": attributes.get("publicationYear"),
+        "publisher": attributes.get("publisher", ""),
+    }
 
 
 def fetch_update_notices(doi: str, mailto: str | None = None) -> list[dict]:
@@ -123,7 +209,7 @@ def fetch_update_notices(doi: str, mailto: str | None = None) -> list[dict]:
             if normalize_doi(str(update.get("DOI", ""))) == doi:
                 notices.append(
                     {
-                        "type": str(update.get("type", "")).strip().lower(),
+                        "type": normalize_update_type(str(update.get("type", ""))),
                         "notice_doi": item.get("DOI", ""),
                         "source": update.get("source", ""),
                     }
@@ -185,6 +271,38 @@ def _check_metadata(label: str, title: str, doi: str, metadata: dict, agency: st
     return errors
 
 
+def _check_bibliographic_metadata(label: str, entry: dict, metadata: dict, agency: str) -> list[str]:
+    errors: list[str] = []
+
+    expected_authors = author_names(entry.get("authors"))
+    resolved_authors = author_names(_metadata_authors(metadata))
+    if expected_authors and not resolved_authors:
+        errors.append(f"{label}: authors missing from {agency} metadata; verify authoritative metadata before citing")
+    elif expected_authors != resolved_authors:
+        errors.append(f"{label}: authors do not match {agency} metadata")
+
+    expected_year = entry.get("year")
+    resolved_year = _metadata_year(metadata)
+    if resolved_year is None:
+        errors.append(f"{label}: year missing from {agency} metadata; verify authoritative metadata before citing")
+    elif expected_year != resolved_year:
+        errors.append(f"{label}: year does not match {agency} metadata")
+
+    expected_venue = entry.get("venue")
+    resolved_venue = _metadata_venue(metadata)
+    if entry.get("source_type") in VENUE_SOURCE_TYPES and not resolved_venue:
+        errors.append(f"{label}: venue missing from {agency} metadata; verify authoritative metadata before citing")
+    if (
+        isinstance(expected_venue, str)
+        and expected_venue.strip()
+        and resolved_venue
+        and normalize_title(expected_venue) != normalize_title(resolved_venue)
+    ):
+        errors.append(f"{label}: venue does not match {agency} metadata")
+
+    return errors
+
+
 def validate_access(label: str, entry: dict, root: Path) -> list[str]:
     """Check what was actually read, and surface sources still waiting on the user."""
     errors: list[str] = []
@@ -206,8 +324,38 @@ def validate_access(label: str, entry: dict, root: Path) -> list[str]:
     if local_file is not None:
         if not isinstance(local_file, str) or not local_file.strip():
             errors.append(f"{label}: local_file must be a non-empty path")
-        elif not (root / local_file).is_file():
-            errors.append(f"{label}: local_file '{local_file}' does not exist")
+        else:
+            root_path = root.resolve()
+            file_path = (root_path / local_file).resolve()
+            try:
+                file_path.relative_to(root_path)
+            except ValueError:
+                errors.append(f"{label}: local_file must stay inside {root_path}")
+            else:
+                if not file_path.is_file():
+                    errors.append(f"{label}: local_file '{local_file}' does not exist")
+
+    return errors
+
+
+def validate_bibliographic_fields(label: str, entry: dict, source_type: object) -> list[str]:
+    errors: list[str] = []
+
+    authors = entry.get("authors")
+    if not isinstance(authors, list) or not authors:
+        errors.append(f"{label}: authors must be a non-empty list of strings")
+    elif not all(isinstance(author, str) and author.strip() for author in authors):
+        errors.append(f"{label}: authors must be a non-empty list of strings")
+
+    year = entry.get("year")
+    if type(year) is not int or year < 1000 or year > 9999:
+        errors.append(f"{label}: year must be a four-digit integer")
+
+    venue = entry.get("venue")
+    if source_type in VENUE_SOURCE_TYPES and (
+        not isinstance(venue, str) or not venue.strip()
+    ):
+        errors.append(f"{label}: venue must be a non-empty string")
 
     return errors
 
@@ -275,6 +423,7 @@ def validate_registry(
             errors.append(f"{label}: invalid source_type '{source_type}'")
 
         errors.extend(validate_access(label, entry, base_dir))
+        errors.extend(validate_bibliographic_fields(label, entry, source_type))
 
         raw_doi = entry.get("doi")
         doi = normalize_doi(raw_doi) if isinstance(raw_doi, str) else ""
@@ -298,6 +447,7 @@ def validate_registry(
             continue
 
         errors.extend(_check_metadata(label, title, doi, metadata, agency))
+        errors.extend(_check_bibliographic_metadata(label, entry, metadata, agency))
 
         try:
             notices = updates(doi)
@@ -308,7 +458,8 @@ def validate_registry(
         acknowledged = entry.get("retraction_ack")
         is_acknowledged = isinstance(acknowledged, str) and bool(acknowledged.strip())
 
-        blocking = sorted({n["type"] for n in notices if n["type"] in BLOCKING_UPDATE_TYPES})
+        blocking = sorted({normalize_update_type(str(n.get("type", ""))) for n in notices}
+                          & BLOCKING_UPDATE_TYPES)
         if blocking and not is_acknowledged:
             errors.append(
                 f"{label}: flagged as {', '.join(blocking)} - do not cite as a valid "

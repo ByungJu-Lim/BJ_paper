@@ -49,6 +49,8 @@ class TestStructuralValidation(RegistryTestCase):
                 "retrieved_at": "2026-09-05",
                 "source_type": "standard",
                 "access": "full-text",
+                "authors": ["NIST"],
+                "year": 2024,
             }])
             self.assertEqual(validate_registry(path), [])
 
@@ -61,6 +63,8 @@ class TestStructuralValidation(RegistryTestCase):
                 "retrieved_at": "yesterday",
                 "source_type": "web",
                 "access": "full-text",
+                "authors": ["Example Org"],
+                "year": 2026,
             }])
             errors = validate_registry(path)
             self.assertTrue(any("URL" in error for error in errors))
@@ -75,6 +79,8 @@ class TestStructuralValidation(RegistryTestCase):
                 "retrieved_at": "2027-01-01",
                 "source_type": "web",
                 "access": "full-text",
+                "authors": ["Example Org"],
+                "year": 2027,
             }])
             errors = validate_registry(path, today=date(2026, 9, 5))
             self.assertTrue(any("future" in error for error in errors))
@@ -88,9 +94,42 @@ class TestStructuralValidation(RegistryTestCase):
                 "retrieved_at": "2026-09-05",
                 "source_type": "preprint",
                 "access": "full-text",
+                "authors": ["No Doi"],
+                "year": 2026,
+                "venue": "arXiv",
             }])
             errors = validate_registry(path)
             self.assertTrue(any("requires a DOI" in error for error in errors))
+
+    def test_doi_sources_require_canonical_bibliographic_fields(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [{
+                "key": "thin2026",
+                "title": "Missing Metadata",
+                "url": "https://doi.org/10.1234/thin",
+                "doi": "10.1234/thin",
+                "retrieved_at": "2026-09-05",
+                "source_type": "journal-article",
+                "access": "full-text",
+            }])
+            errors = validate_registry(path)
+            self.assertTrue(any("authors must be" in error for error in errors))
+            self.assertTrue(any("year must be" in error for error in errors))
+            self.assertTrue(any("venue must be" in error for error in errors))
+
+    def test_web_sources_do_not_require_venue(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [{
+                "key": "web2026",
+                "title": "A Web Source",
+                "url": "https://example.org/source",
+                "retrieved_at": "2026-09-05",
+                "source_type": "web",
+                "access": "full-text",
+                "authors": ["Example Org"],
+                "year": 2026,
+            }])
+            self.assertEqual(validate_registry(path, today=date(2026, 9, 5)), [])
 
 
 class TestDoiResolution(RegistryTestCase):
@@ -104,10 +143,13 @@ class TestDoiResolution(RegistryTestCase):
                 "retrieved_at": "2026-09-05",
                 "source_type": "journal-article",
                 "access": "full-text",
+                "authors": ["Jane Smith"],
+                "year": 2024,
+                "venue": "Journal of Examples",
             }])
             errors = self.validate(
                 path,
-                fetch_crossref=lambda doi: {"DOI": doi, "title": ["Verified research title"]},
+                fetch_crossref=lambda doi: {"DOI": doi, "title": ["Verified research title"], "author": [{"given": "Jane", "family": "Smith"}], "published": {"date-parts": [[2024]]}, "container-title": ["Journal of Examples"]},
             )
             self.assertTrue(any("title does not match Crossref" in error for error in errors))
 
@@ -121,10 +163,13 @@ class TestDoiResolution(RegistryTestCase):
                 "retrieved_at": "2026-09-05",
                 "source_type": "journal-article",
                 "access": "full-text",
+                "authors": ["Jane Smith"],
+                "year": 2024,
+                "venue": "Journal of Examples",
             }])
             errors = self.validate(
                 path,
-                fetch_crossref=lambda doi: {"DOI": doi, "title": ["Verified research title"]},
+                fetch_crossref=lambda doi: {"DOI": doi, "title": ["Verified research title"], "author": [{"given": "Jane", "family": "Smith"}], "published": {"date-parts": [[2024]]}, "container-title": ["Journal of Examples"]},
             )
             self.assertEqual(errors, [])
 
@@ -139,6 +184,9 @@ class TestDoiResolution(RegistryTestCase):
                 "retrieved_at": "2026-09-05",
                 "source_type": "preprint",
                 "access": "full-text",
+                "authors": ["Ashish Vaswani"],
+                "year": 2017,
+                "venue": "arXiv",
             }])
 
             def crossref_404(doi: str) -> dict:
@@ -147,7 +195,7 @@ class TestDoiResolution(RegistryTestCase):
             errors = self.validate(
                 path,
                 fetch_crossref=crossref_404,
-                fetch_datacite=lambda doi: {"DOI": doi, "title": ["Attention Is All You Need"]},
+                fetch_datacite=lambda doi: {"DOI": doi, "title": ["Attention Is All You Need"], "creators": [{"name": "Vaswani, Ashish"}], "publicationYear": 2017, "publisher": "arXiv"},
             )
             self.assertEqual(errors, [])
 
@@ -161,6 +209,9 @@ class TestDoiResolution(RegistryTestCase):
                 "retrieved_at": "2026-09-05",
                 "source_type": "journal-article",
                 "access": "full-text",
+                "authors": ["Ghost Writer"],
+                "year": 2026,
+                "venue": "Journal of Examples",
             }])
 
             def not_found(doi: str) -> dict:
@@ -179,10 +230,13 @@ class TestRetractionScreening(RegistryTestCase):
         "retrieved_at": "2026-09-05",
         "source_type": "journal-article",
         "access": "full-text",
+        "authors": ["Jane Smith"],
+        "year": 1998,
+        "venue": "Journal of Examples",
     }
 
     def metadata(self, doi: str) -> dict:
-        return {"DOI": doi, "title": ["Retracted Study"]}
+        return {"DOI": doi, "title": ["Retracted Study"], "author": [{"given": "Jane", "family": "Smith"}], "published": {"date-parts": [[1998]]}, "container-title": ["Journal of Examples"]}
 
     def notices(self, update_type: str):
         return lambda doi: [
@@ -205,7 +259,7 @@ class TestRetractionScreening(RegistryTestCase):
             errors = self.validate(
                 path,
                 fetch_crossref=self.metadata,
-                fetch_updates=self.notices("expression_of_concern"),
+                fetch_updates=self.notices("expression-of-concern"),
             )
             self.assertTrue(any("expression_of_concern" in error for error in errors))
 
@@ -294,6 +348,8 @@ class TestFullTextAccess(RegistryTestCase):
             "retrieved_at": "2026-09-05",
             "source_type": "report",
             "access": "full-text",
+            "authors": ["Jane Smith"],
+            "year": 2024,
         }
         base.update(overrides)
         return base
@@ -343,6 +399,76 @@ class TestFullTextAccess(RegistryTestCase):
                 tmp, [self.entry(local_file="docs/sources/smith2024boiler.pdf")]
             )
             self.assertEqual(validate_registry(path, root=Path(tmp)), [])
+
+    def test_local_file_must_remain_inside_root(self):
+        with TemporaryDirectory() as tmp:
+            outside = Path(tmp).parent / "outside-paper-source.pdf"
+            outside.write_bytes(b"%PDF-1.4")
+            try:
+                path = self.write_registry(tmp, [self.entry(local_file="../outside-paper-source.pdf")])
+                errors = validate_registry(path, root=Path(tmp))
+                self.assertTrue(any("must stay inside" in error for error in errors))
+            finally:
+                outside.unlink(missing_ok=True)
+
+
+class TestOnlineBibliographicMetadata(RegistryTestCase):
+    ENTRY = {
+        "key": "smith2024boiler",
+        "title": "Boiler Efficiency",
+        "url": "https://doi.org/10.1234/example",
+        "doi": "10.1234/example",
+        "retrieved_at": "2026-09-05",
+        "source_type": "journal-article",
+        "access": "full-text",
+        "authors": ["Jane Smith", "Ji-Hoon Kim"],
+        "year": 2024,
+        "venue": "Applied Energy",
+    }
+
+    def test_online_metadata_confirms_author_year_and_venue(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [dict(self.ENTRY)])
+            errors = self.validate(
+                path,
+                fetch_crossref=lambda doi: {
+                    "DOI": doi,
+                    "title": ["Boiler Efficiency"],
+                    "author": [
+                        {"given": "Jane", "family": "Smith"},
+                        {"given": "Ji-Hoon", "family": "Kim"},
+                    ],
+                    "published-print": {"date-parts": [[2024]]},
+                    "container-title": ["Applied Energy"],
+                },
+            )
+            self.assertEqual(errors, [])
+
+    def test_online_missing_metadata_fails_closed(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [dict(self.ENTRY)])
+            errors = self.validate(path, fetch_crossref=lambda doi: {
+                "DOI": doi, "title": ["Boiler Efficiency"]})
+            self.assertTrue(any("authors missing" in error for error in errors))
+            self.assertTrue(any("year missing" in error for error in errors))
+            self.assertTrue(any("venue missing" in error for error in errors))
+
+    def test_online_metadata_mismatch_is_reported(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [dict(self.ENTRY)])
+            errors = self.validate(
+                path,
+                fetch_crossref=lambda doi: {
+                    "DOI": doi,
+                    "title": ["Boiler Efficiency"],
+                    "author": [{"given": "John", "family": "Doe"}],
+                    "published-print": {"date-parts": [[2025]]},
+                    "container-title": ["Invented Journal"],
+                },
+            )
+            self.assertTrue(any("authors do not match" in error for error in errors))
+            self.assertTrue(any("year does not match" in error for error in errors))
+            self.assertTrue(any("venue does not match" in error for error in errors))
 
 
 if __name__ == "__main__":

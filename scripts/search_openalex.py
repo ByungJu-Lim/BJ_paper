@@ -131,6 +131,11 @@ def to_candidate(work: dict, today: date) -> dict:
     open_access = work.get("open_access") or {}
     best_location = work.get("best_oa_location") or {}
     source = (work.get("primary_location") or {}).get("source") or {}
+    authors = [
+        ((a or {}).get("author") or {}).get("display_name")
+        for a in (work.get("authorships") or [])
+        if ((a or {}).get("author") or {}).get("display_name")
+    ]
 
     entry = {
         "key": build_key(work),
@@ -138,6 +143,9 @@ def to_candidate(work: dict, today: date) -> dict:
         "url": landing_url(work, doi),
         "retrieved_at": today.isoformat(),
         "source_type": map_source_type(work),
+        "authors": authors,
+        "year": work.get("publication_year"),
+        "venue": source.get("display_name") or "",
     }
     if doi:
         entry["doi"] = doi
@@ -145,10 +153,7 @@ def to_candidate(work: dict, today: date) -> dict:
     return {
         "entry": entry,
         "openalex_id": work.get("id"),
-        "authors": [
-            ((a or {}).get("author") or {}).get("display_name")
-            for a in (work.get("authorships") or [])[:5]
-        ],
+        "authors": authors,
         "venue": source.get("display_name"),
         "publication_year": work.get("publication_year"),
         "cited_by_count": work.get("cited_by_count"),

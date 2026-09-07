@@ -16,8 +16,7 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
    — which often decides whether you can read the paper or have to ask the user
    for it:
    ```bash
-   python scripts/search_openalex.py --query "<topic>" --limit 15 \
-     --from-year 2018 --mailto <your email>
+   python scripts/search_openalex.py --query "<topic>" --limit 15 --from-year 2018 --mailto <your email>
    ```
    Each candidate has an `entry` block already shaped for the registry, plus
    `pdf_url`, `is_oa`, `venue`, and `cited_by_count` to judge relevance. Retracted
@@ -39,11 +38,16 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
      "url": "<the URL actually returned by the search>",
      "retrieved_at": "<today's date, YYYY-MM-DD>",
      "source_type": "<journal-article|conference-paper|preprint|report|dataset|standard|web>",
+     "authors": ["<complete author names, in publication order>"],
+     "year": 2024,
+     "venue": "<journal, conference, or preprint repository; required for those types>",
      "doi": "<DOI for journal/conference/preprint entries; omit otherwise>",
      "access": "<full-text|abstract-only|awaiting-user-file>",
      "local_file": "<docs/sources/<key>.pdf, when the user supplied the file>"
    }
    ```
+   Copy all authors (or the corporate author), the publication year, and the venue from authoritative metadata. Discovery candidates may be incomplete; complete and verify these fields before registering/citing the source. Use the publication year rather than the retrieval year. Do not invent a value when it is missing. `local_file` must resolve to an existing file inside this repository.
+
    Use `preprint` for arXiv and similar servers, with the server-issued DOI (e.g. `10.48550/arXiv.1706.03762`). Those resolve through DataCite rather than Crossref and the verifier handles the fallback. Never label a preprint as a journal article — peer-review status changes how much weight a claim can carry.
 3. **Read the source before registering what it says.** A title and abstract tell
    you a paper exists, not what it actually claims, which method it used, or under
@@ -70,7 +74,7 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
    continue. Files in `docs/sources/` are gitignored — publisher PDFs are
    copyrighted and this repository is mirrored publicly. Never commit one.
 
-5. Run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json`. For every entry carrying a DOI, also run it with `--online` (add `--mailto <your email>` for the Crossref polite pool). That resolves the DOI, matches the title, and screens the work against Crossref's Retraction Watch feed. Quarantine failed entries instead of using them.
+5. Run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json`. For every entry carrying a DOI, also run it with `--online` (add `--mailto <your email>` for the Crossref polite pool). That resolves the DOI, compares title, full author names in order, publication year, and venue, and screens the work against Crossref's Retraction Watch feed. Missing agency metadata fails verification too; recover the correct authoritative metadata before citing. The verifier is read-only and does not fill registry fields. Quarantine failed entries instead of using them.
    A source flagged as retracted, withdrawn, or under an expression of concern must not be cited as a valid result. If you are deliberately citing it *as* a retracted work, record why in a `retraction_ack` field on that entry — there is no other way past the block.
 6. Write or update a summary note at `docs/notes/<topic-slug>.md` covering what the source claims and how it relates to the current paper's topic.
 7. Update `docs/notes/story-brief.md`. This is the step that keeps the search
@@ -85,7 +89,6 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
      state outright.
    Then re-run the check:
    ```bash
-   python scripts/verify_story_brief.py --require-slots Context,Gap,Question \
-     --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md
+   python scripts/verify_story_brief.py --require-slots Context,Gap,Question --registry docs/notes/retrieved-sources.json --sections "docs/sections/*.md"
    ```
 8. Hand off to `paper-supervise`, which routes the result through the critic for the `lit-review` stage's review round.

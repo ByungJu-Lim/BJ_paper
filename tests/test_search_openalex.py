@@ -70,8 +70,24 @@ class TestCandidateShape(unittest.TestCase):
         candidate = to_candidate(work(), TODAY)
         self.assertEqual(
             set(candidate["entry"]),
-            {"key", "title", "url", "retrieved_at", "source_type", "doi"},
+            {
+                "key",
+                "title",
+                "url",
+                "retrieved_at",
+                "source_type",
+                "doi",
+                "authors",
+                "year",
+                "venue",
+            },
         )
+
+    def test_entry_includes_canonical_bibliographic_metadata(self):
+        candidate = to_candidate(work(), TODAY)
+        self.assertEqual(candidate["entry"]["authors"], ["Ji-Hoon Kim"])
+        self.assertEqual(candidate["entry"]["year"], 2021)
+        self.assertEqual(candidate["entry"]["venue"], "Applied Energy")
 
     def test_access_is_not_guessed(self):
         """access records what was actually read; a search cannot know that."""
@@ -121,6 +137,15 @@ class TestSearch(unittest.TestCase):
     def test_empty_results_are_handled(self):
         result = search("fouling", today=TODAY, fetch=lambda *a, **k: {"meta": {"count": 0}})
         self.assertEqual(result["candidates"], [])
+
+
+class TestCompleteAuthors(unittest.TestCase):
+    def test_candidate_preserves_authors_beyond_five(self):
+        work = {"display_name": "Example", "publication_year": 2024,
+                "authorships": [{"author": {"display_name": f"Author {i}"}}
+                                for i in range(8)]}
+        candidate = to_candidate(work, date(2026, 9, 5))
+        self.assertEqual(len(candidate["entry"]["authors"]), 8)
 
 
 if __name__ == "__main__":
