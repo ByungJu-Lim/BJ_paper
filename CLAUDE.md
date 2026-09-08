@@ -2,7 +2,7 @@
 
 > 새 논문을 시작할 때 가제·분야·언어를 작성합니다. 목표 학술지는 결과와 범위가 정리된 뒤 확정합니다.
 
-- **가제:** _입력 필요_
+- **가제:** Physics-Informed vs. Data-Driven Machine Learning Surrogates for Fouling-Resistance Prediction in Shell-and-Tube Heat Exchangers: An Extrapolation Study
 - **목표 학술지/학회:** _입력 필요_
 - **분야:** 공학 / 에너지(실험, 공정 해석, AI 설계, 공정설계)
 - **작성 언어:** 영어
