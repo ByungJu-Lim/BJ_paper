@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "key": "he2025machine",
+    "title": "A machine learning and CFD based approach for fouling rapid prediction in shell-and-tube heat exchanger",
+    "url": "https://doi.org/10.1016/j.nucengdes.2024.113759",
+    "retrieved_at": "2026-09-08",
+    "source_type": "journal-article",
+    "authors": ["Shaopeng He", "Yibo Ye", "Mingjun Wang", "Jing Zhang", "Wenxi Tian", "Suizheng Qiu", "G.H. Su"],
+    "year": 2025,
+    "venue": "Nuclear Engineering and Design",
+    "doi": "10.1016/j.nucengdes.2024.113759",
+    "access": "abstract-only"
+  },
+  {
+    "key": "hosseini2022novel",
+    "title": "Novel and robust machine learning approach for estimating the fouling factor in heat exchangers",
+    "url": "https://doi.org/10.1016/j.egyr.2022.06.123",
+    "retrieved_at": "2026-09-08",
+    "source_type": "journal-article",
+    "authors": ["Saleh Hosseini", "Amith Khandakar", "Muhammad E. H. Chowdhury", "Mohamed Arselene Ayari", "Tawsifur Rahman", "Moajjem Hossain Chowdhury", "Behzad Vaferi"],
+    "year": 2022,
+    "venue": "Energy Reports",
+    "doi": "10.1016/j.egyr.2022.06.123",
+    "access": "abstract-only"
+  },
+  {
+    "key": "jadhav2022physics",
+    "title": "Physics Informed Neural Network for Health Monitoring of an Air Preheater",
+    "url": "https://doi.org/10.36001/phme.2022.v7i1.3343",
+    "retrieved_at": "2026-09-08",
+    "source_type": "conference-paper",
+    "authors": ["Vishal Jadhav", "Anirudh Deodhar", "Ashit Gupta", "Venkataramana Runkana"],
+    "year": 2022,
+    "venue": "PHM Society European Conference",
+    "doi": "10.36001/phme.2022.v7i1.3343",
+    "access": "full-text"
+  }
+]
