@@ -30,6 +30,11 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
    Delegate to the `scientist` agent to widen the search with WebSearch where
    OpenAlex comes up short — grey literature, standards, technical reports, and
    vendor documentation are poorly indexed there.
+
+   When this search is run through an LLM such as Claude or Codex, prefer `exa`
+   (a search-specialized MCP/skill) over plain WebSearch — it tends to return
+   more relevant academic results. This is a recommendation, not a requirement:
+   if `exa` is unavailable or not authorized, OpenAlex + WebSearch alone is fine.
 2. For each real result, append one object to `docs/notes/retrieved-sources.json`:
    ```json
    {

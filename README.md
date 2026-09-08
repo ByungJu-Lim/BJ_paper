@@ -2,6 +2,13 @@
 
 공학·에너지 분야의 영어 연구 논문 작성을 지원하는 Claude Code 프로젝트 템플릿입니다. 실험, 공정 해석, AI 설계를 다루며 Gitea 또는 GitHub의 템플릿 저장소 기능으로 논문마다 독립된 저장소를 만들 수 있습니다.
 
+## 사전 준비물
+
+- Git
+- Python 3.10 이상 (검증 스크립트는 표준 라이브러리만 사용하므로 별도 패키지 설치가 필요 없습니다)
+- [Claude Code](https://claude.com/claude-code) CLI (`npm install -g @anthropic-ai/claude-code` 후 저장소 루트에서 `claude` 실행)
+- 이 저장소(Gitea 원본 및/또는 GitHub 미러)에 대한 클론 권한
+
 ## 빠른 시작
 
 1. 저장소 설정에서 **Template Repository**를 활성화합니다. 이 설정은 원본 템플릿에서 한 번만 수행합니다.
