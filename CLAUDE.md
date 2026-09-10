@@ -40,7 +40,7 @@
 - `refuted` 주장은 지우지 않고 남깁니다. 근거가 무엇을 했는지에 대한 기록이며, 검증기가 본문에서 걸러냅니다. 서사 슬롯을 다시 써야 하는 경우에는 사용자 승인을 받습니다.
 - 반증 조건은 실험 **전**에 씁니다. 작성된 주장은 `assumed` 상태여도 반증 조건을 비워둘 수 없습니다. 실험 전 승인된 브리프를 커밋하여 작성 시점을 추적합니다.
 - `docs/notes/retrieved-sources.json`에는 실제 검색 결과만 등록합니다. 학술 논문과 프리프린트는 DOI를 기록하고 `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online`으로 DOI 해석(Crossref, arXiv/Zenodo는 DataCite), 제목 일치, 철회 여부를 확인합니다.
-- 문헌 검색은 `python scripts/search_openalex.py --query "<주제>"`로 시작합니다. OpenAlex는 발견용이고 검증은 하지 않습니다. 색인 누락이 있으므로(일부 arXiv DOI 등) 필요하면 WebSearch로 보완합니다.
+- 문헌 검색은 `python scripts/search_openalex.py --query "<주제>"`로 시작합니다. OpenAlex는 발견용이고 검증은 하지 않습니다. 색인 누락이 있으므로(일부 arXiv DOI 등) 한 색인의 결과만으로 없다고 판단하지 않습니다. OpenAlex가 부족하거나 WebSearch·exa를 쓸 수 없을 때는 `python scripts/search_fallback.py --query "<주제>"`로 Crossref와 arXiv를 직접 조회합니다. 이 스크립트도 발견 전용이며 검증하지 않습니다.
 - 출처는 등록 전에 실제로 읽습니다. `access` 필드에 `full-text` / `abstract-only` / `awaiting-user-file` 중 읽은 만큼만 기록합니다. 전문이 유료장벽 등으로 막히면 추측하거나 초록으로 대체하지 말고 사용자에게 `docs/sources/<key>.pdf`로 내려받아 달라고 요청합니다. 이 폴더는 저작권 때문에 커밋하지 않습니다.
 - 철회·철회 예고(expression of concern) 판정을 받은 출처는 유효한 근거로 인용하지 않습니다. 철회 사실 자체를 논하려는 경우에만 해당 항목에 `retraction_ack`로 사유를 남깁니다.
 - 키가 `docs/notes/retrieved-sources.json`에 없는 인용은 `refs/references.bib`에 추가하지 않습니다. 인용 확정 전후로 `python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --bib refs/references.bib`를 실행합니다. 이 검사는 본문 인용, BibTeX 항목, 레지스트리 세 방향을 모두 대조합니다.

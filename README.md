@@ -43,7 +43,14 @@
 python scripts/search_openalex.py --query "heat exchanger fouling" --limit 15 --from-year 2018 --mailto you@example.com
 ```
 
-이 스크립트는 **검색만** 합니다. 결과는 여전히 신뢰할 수 없는 입력이며 아래 검증을 통과해야 레지스트리에 들어갑니다.
+OpenAlex가 부족하거나 WebSearch·`exa`를 쓸 수 없을 때는 Crossref와 arXiv를 직접 조회합니다. 발견 단계가 한 색인에만 걸려 있으면 그 색인이 멈출 때 문헌 검색 전체가 멈춥니다.
+
+```bash
+python scripts/search_fallback.py --query "heat exchanger fouling" --limit 10 --mailto you@example.com
+python scripts/search_fallback.py --query "heat exchanger fouling" --source arxiv
+```
+
+두 검색 스크립트는 **검색만** 합니다. 결과는 여전히 신뢰할 수 없는 입력이며 아래 검증을 통과해야 레지스트리에 들어갑니다.
 
 ```bash
 python -m unittest discover -s tests -v

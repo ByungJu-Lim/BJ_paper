@@ -35,6 +35,24 @@ Every entry in `docs/notes/retrieved-sources.json` must come from an actual sear
    (a search-specialized MCP/skill) over plain WebSearch — it tends to return
    more relevant academic results. This is a recommendation, not a requirement:
    if `exa` is unavailable or not authorized, OpenAlex + WebSearch alone is fine.
+
+   Do not let one index decide what exists. When OpenAlex comes up short — or
+   when WebSearch and `exa` are both unreachable, which is a real and observed
+   failure mode rather than a hypothetical — query Crossref and arXiv directly:
+   ```bash
+   python scripts/search_fallback.py --query "<topic>" --limit 10 --mailto <your email>
+   python scripts/search_fallback.py --query "<topic>" --source arxiv
+   ```
+   Same output shape as the OpenAlex search and the same standing: discovery
+   only, verified by nothing. Crossref carries the published record and its own
+   retraction notices; arXiv carries preprints Crossref may not list at all.
+   Register an arXiv hit as `preprint` with its `10.48550/arXiv.*` DOI — the
+   verifier resolves those through DataCite.
+
+   A search that returns nothing is a result worth recording, but only once you
+   have asked more than one index. Absence from a single index is not evidence
+   the work does not exist, and a `Gap` built on one index is a `Gap` nobody
+   looked for.
 2. For each real result, append one object to `docs/notes/retrieved-sources.json`:
    ```json
    {
