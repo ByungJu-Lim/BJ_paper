@@ -22,17 +22,14 @@
 >
 > ### 신규 논문을 시작할 때
 >
-> 검증용 작성은 **거기서 중단하고**, 아래를 모두 마친 뒤 `story-brief`부터 새로 시작합니다. 검증용 산출물이 한 조각이라도 남으면 새 논문이 남의 주장과 남의 출처를 물려받은 채 출발합니다.
+> 검증용 작성은 **거기서 중단하고** 초기화한 뒤 `story-brief`부터 새로 시작합니다. 검증용 산출물이 한 조각이라도 남으면 새 논문이 남의 주장과 남의 출처를 물려받은 채 출발합니다.
 >
-> 1. 이 인용 블록 전체를 삭제하고, 위의 가제·분야·언어를 새 논문 것으로 교체합니다.
-> 2. `.omc/paper-state.md`의 모든 단계를 `status: not-started`, `round: 0/3`, 빈 verdict·issues로 되돌립니다.
-> 3. `docs/notes/story-brief.md`의 서사 슬롯을 `_입력 필요_`로, 주장 원장과 반증 조건을 빈 표로 되돌립니다.
-> 4. `docs/notes/retrieved-sources.json`을 `[]`로 비웁니다.
-> 5. `docs/notes/`의 주제 노트·`novelty-matrix.md`·`revision-log.md`, `docs/sections/`의 본문, `docs/outline.md`의 내용, `refs/references.bib`의 항목, `figures/`·`data/processed/`의 산출물, `submissions/`의 투고 폴더와 로그를 비웁니다. `docs/sources/`는 커밋되지 않으므로 로컬에서 지웁니다.
-> 6. `docs/notes/pipeline-findings.md`는 **템플릿 저장소에만** 남깁니다. 파생 저장소에서는 삭제합니다.
-> 7. `python scripts/check_paper_state.py --state .omc/paper-state.md`와 `python scripts/verify_story_brief.py --state .omc/paper-state.md --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json`가 빈 상태에서 통과하는지 확인합니다.
+> ```bash
+> python scripts/reset_paper.py            # 지울 대상만 보여줍니다. 아무것도 쓰지 않습니다
+> python scripts/reset_paper.py --confirm  # 실제로 초기화하고, 빈 상태가 검증을 통과하는지 확인합니다
+> ```
 >
-> 이 초기화는 아직 스크립트가 없어 손으로 합니다 — `pipeline-findings.md`의 F7 참고.
+> 초기화는 서사 슬롯·주장 원장·출처·본문·그림·매니페스트·투고 기록을 비우고, 이 인용 블록과 유지보수자의 저장소 호스팅 설정(`.githooks/`, Gitea·GitHub 이중 원격 규칙)을 함께 걷어냅니다. `data/raw/`는 건드리지 않습니다. 템플릿 원본 저장소에서 돌릴 때만 `--template-repo`를 붙여 `pipeline-findings.md`와 호스팅 설정을 남깁니다.
 
 ## 작업 흐름
 
@@ -61,6 +58,7 @@
 
 ## 필수 규칙
 
+- 새 논문의 첫 작업은 **저장소를 어디에 둘지 사용자에게 묻는 것**입니다. 이 템플릿은 자기 원격을 들고 다니지 않습니다. GitHub를 쓸지, 다른 호스트를 쓸지, 로컬만 쓸지 물어보고 사용자가 답한 곳에 원격을 설정합니다. 템플릿을 받은 저장소의 원격이나 이전 사용자의 호스팅 방식을 그대로 물려받는다고 가정하지 마세요. 사용자가 원격을 원하지 않으면 로컬 커밋만 하고 푸시하지 않습니다.
 - 논문 작성 작업은 `docs/notes/story-brief.md`를 읽는 것에서 시작합니다. 템플릿 개발·검증기 수정은 연구 단계나 연구 승인 상태를 변경하지 않습니다.
 - 주장의 상태(`assumed` / `supported` / `refuted`)는 해석 가능한 근거 없이 바꾸지 않습니다. 근거는 등록된 출처 키(`@key`), 실행 매니페스트(`run:<run-id>`), 또는 이 논문의 그림·표(`Fig. N`)뿐입니다.
 - `assumed` 주장은 Results·Discussion·Conclusion에서 단정형으로 쓸 수 없습니다. 작성된 섹션은 자신이 담는 주장을 제목 아래 비어 있지 않은 `<!-- claims: C1, C3 -->` 한 줄로 선언합니다. `python scripts/verify_story_brief.py --state .omc/paper-state.md --sections docs/sections/*.md --registry docs/notes/retrieved-sources.json`로 검증합니다. 주석과 실제 문장의 의미가 일치하는지는 critic이 별도로 검토합니다.
