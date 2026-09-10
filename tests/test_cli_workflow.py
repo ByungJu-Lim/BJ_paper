@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from scripts.check_paper_state import REQUIRED_STAGE_IDS
+from tests.state_fixture import write_state, with_stage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +31,11 @@ class TestCitationWorkflow(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             directory = Path(tmp)
             self.fixture(directory)
-            args = ('--state', str(ROOT / '.omc/paper-state.md'))
+            # A drafting-phase state, not the live one: bibliography completeness
+            # is deferred until citation-manage is under review, and that must
+            # not depend on how far the real manuscript happens to have got.
+            state = write_state(directory / 'drafting-state.md', with_stage('outline-draft', 'in-progress'))
+            args = ('--state', str(state))
             result = self.run_check(directory, *args)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('deferred', result.stdout)
@@ -67,6 +72,7 @@ class TestCitationWorkflow(unittest.TestCase):
             (directory / 'references.bib').write_text(
                 '@article{real2024,title={Invented},author={Jane Doe},year={2024},'
                 'doi={10.1234/example},journal={Example Journal}}', encoding='utf-8')
-            result = self.run_check(directory, '--state', str(ROOT / '.omc/paper-state.md'))
+            state = write_state(directory / 'drafting-state.md', with_stage('outline-draft', 'in-progress'))
+            result = self.run_check(directory, '--state', str(state))
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('title differs', result.stdout)

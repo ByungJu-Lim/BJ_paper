@@ -6,6 +6,59 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from scripts.verify_story_brief import validate_claims, validate_evidence, validate_sections
+from tests.state_fixture import write_state, with_stage
+
+UNWRITTEN_BRIEF = '''# Story Brief
+
+## Narrative
+
+| Slot | Sentence |
+|---|---|
+| Context | _입력 필요_ |
+| Gap | _입력 필요_ |
+| Question | _입력 필요_ |
+| Approach | _입력 필요_ |
+| Finding | _입력 필요_ |
+| Implication | _입력 필요_ |
+
+## Claims
+
+| ID | Claim | Status | Evidence |
+|---|---|---|---|
+
+## Falsifiers
+'''
+
+
+
+SECTION_FIXTURE = """# Introduction
+<!-- claims: C1 -->
+Efficiency may improve.
+"""
+
+WRITTEN_BRIEF = """# Story Brief
+
+## Narrative
+
+| Slot | Sentence |
+|---|---|
+| Context | Fouling degrades heat-exchanger performance. |
+| Gap | No study compares hybrid and black-box surrogates out of envelope. |
+| Question | Does embedding a correlation lower extrapolation RMSE? |
+| Approach | _입력 필요_ |
+| Finding | _입력 필요_ |
+| Implication | _입력 필요_ |
+
+## Claims
+
+| ID | Claim | Status | Evidence |
+|---|---|---|---|
+| C1 | Extrapolation RMSE exceeds interpolation RMSE. | assumed | |
+
+## Falsifiers
+
+- **C1:** Extrapolation RMSE does not exceed interpolation RMSE.
+"""
 
 
 def claim(evidence='', status='supported'):
@@ -44,12 +97,22 @@ class TestStoryRegressions(unittest.TestCase):
                 self.assertTrue(validate_sections(claim('', 'assumed'), [path], False))
 
     def test_default_cli_accepts_literal_glob(self):
+        # The CLI expands its own globs because PowerShell does not. Point it at a
+        # fixture, not at docs/: a mid-draft manuscript is a manuscript problem,
+        # and this test is about argument handling.
         root = Path(__file__).resolve().parents[1]
-        result = subprocess.run([sys.executable, str(root / 'scripts/verify_story_brief.py'),
-                                 '--sections', 'docs/sections/*.md',
-                                 '--registry', 'docs/notes/retrieved-sources.json'],
-                                cwd=root, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / 'sections').mkdir()
+            (directory / 'sections/01-introduction.md').write_text(SECTION_FIXTURE, encoding='utf-8')
+            (directory / 'brief.md').write_text(WRITTEN_BRIEF, encoding='utf-8')
+            (directory / 'sources.json').write_text('[]', encoding='utf-8')
+            result = subprocess.run([sys.executable, str(root / 'scripts/verify_story_brief.py'),
+                                     '--brief', str(directory / 'brief.md'),
+                                     '--sections', str(directory / 'sections/*.md'),
+                                     '--registry', str(directory / 'sources.json')],
+                                    cwd=root, capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_valid_manifest_and_missing_artifact(self):
         with TemporaryDirectory() as tmp:
@@ -93,15 +156,51 @@ class TestStoryRegressions(unittest.TestCase):
             self.assertTrue(validate_sections(claim(), [path], False))
 
     def test_workflow_approval_cannot_bypass_unwritten_brief(self):
+        # An approved story-brief stage forces Context/Gap/Question to be written.
+        # Approval in the ledger is not a substitute for the argument existing.
         root = Path(__file__).resolve().parents[1]
         with TemporaryDirectory() as tmp:
-            state = (root / '.omc/paper-state.md').read_text(encoding='utf-8')
-            state = state.replace('status: not-started', 'status: approved', 1)
-            state = state.replace('round: 0/3', 'round: 1/3', 1)
-            state = state.replace('last-critic-verdict:', 'last-critic-verdict: pass', 1)
-            path = Path(tmp) / 'state.md'
-            path.write_text(state, encoding='utf-8')
-            result = subprocess.run([sys.executable, 'scripts/verify_story_brief.py', '--state', str(path)],
+            directory = Path(tmp)
+            state = write_state(directory / 'state.md', with_stage('story-brief', 'approved'))
+            brief = directory / 'brief.md'
+            brief.write_text(UNWRITTEN_BRIEF, encoding='utf-8')
+            result = subprocess.run([sys.executable, 'scripts/verify_story_brief.py',
+                                     '--state', str(state), '--brief', str(brief)],
                                     cwd=root, capture_output=True, text=True, encoding='utf-8')
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn('required', result.stdout)
+            self.assertIn('Context', result.stdout)
+
+    def test_workflow_approval_accepts_a_written_brief(self):
+        # The mirror of the test above: the gate must fail on an unwritten brief
+        # for the brief's sake, not because any approved state trips it.
+        root = Path(__file__).resolve().parents[1]
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            state = write_state(directory / 'state.md', with_stage('story-brief', 'approved'))
+            brief = directory / 'brief.md'
+            brief.write_text(WRITTEN_BRIEF, encoding='utf-8')
+            result = subprocess.run([sys.executable, 'scripts/verify_story_brief.py',
+                                     '--state', str(state), '--brief', str(brief)],
+                                    cwd=root, capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class TestSuiteIndependence(unittest.TestCase):
+    """The suite is a pre-submission gate; it must not read live research state.
+
+    `submission-manage` runs `unittest discover` before a paper goes to a venue.
+    A test that reads the live workflow ledger turns red as the research
+    advances and blocks submission for a reason unrelated to the manuscript.
+    Build the state with `tests/state_fixture.py` instead.
+    """
+
+    def test_no_test_module_reads_the_live_workflow_ledger(self):
+        # Assembled at runtime so this guard does not flag its own source.
+        needle = ".omc" + "/paper-state.md"
+        tests_dir = Path(__file__).resolve().parent
+        offenders = []
+        for path in sorted(tests_dir.glob("test_*.py")):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if needle in line.replace("\\", "/"):
+                    offenders.append(f"{path.name}:{number}")
+        self.assertEqual(offenders, [], "build the state with tests/state_fixture.py instead")
