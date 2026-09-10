@@ -8,6 +8,7 @@ Verification layers, in order:
                  or under an expression of concern.
 """
 import argparse
+import html
 import json
 import re
 import time
@@ -64,7 +65,10 @@ def normalize_doi(value: str) -> str:
 
 
 def normalize_title(value: str) -> str:
-    return " ".join(re.sub(r"[^\w]+", " ", value.casefold()).split())
+    """Crossref returns HTML-escaped text ("Computers &amp; Chemical Engineering"),
+    so unescape before stripping punctuation: otherwise "&amp;" survives as the word
+    "amp" and never matches a registry entry spelled with a literal ampersand."""
+    return " ".join(re.sub(r"[^\w]+", " ", html.unescape(value).casefold()).split())
 
 
 def normalize_update_type(value: str) -> str:

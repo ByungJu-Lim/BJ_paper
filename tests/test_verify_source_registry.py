@@ -173,6 +173,35 @@ class TestDoiResolution(RegistryTestCase):
             )
             self.assertEqual(errors, [])
 
+    def test_html_escaped_crossref_metadata_matches_plain_registry_text(self):
+        """Crossref returns "Computers &amp; Chemical Engineering"; the registry spells
+        the venue with a literal ampersand. Both must normalize to the same string, or
+        every Elsevier journal with "&" in its name fails venue verification."""
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [{
+                "key": "gallup2023physics",
+                "title": "Physics-guided neural networks & hybrid process modeling",
+                "url": "https://doi.org/10.1234/example",
+                "doi": "https://doi.org/10.1234/example",
+                "retrieved_at": "2026-09-05",
+                "source_type": "journal-article",
+                "access": "full-text",
+                "authors": ["Ethan Gallup"],
+                "year": 2023,
+                "venue": "Computers & Chemical Engineering",
+            }])
+            errors = self.validate(
+                path,
+                fetch_crossref=lambda doi: {
+                    "DOI": doi,
+                    "title": ["Physics-guided neural networks &amp; hybrid process modeling"],
+                    "author": [{"given": "Ethan", "family": "Gallup"}],
+                    "published": {"date-parts": [[2023]]},
+                    "container-title": ["Computers &amp; Chemical Engineering"],
+                },
+            )
+            self.assertEqual(errors, [])
+
     def test_arxiv_preprint_falls_back_to_datacite(self):
         """arXiv DOIs are registered with DataCite, so Crossref answers 404."""
         with TemporaryDirectory() as tmp:
