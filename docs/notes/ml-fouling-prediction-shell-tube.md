@@ -155,10 +155,31 @@ a pipeline-validation workload rather than a submission (see `CLAUDE.md`).
   and that has to be stated rather than omitted.
 
   The affirmative reason for choosing additive-residual anyway, recorded here so the
-  Approach slot can pin it when methods are fixed: additive-residual is what makes C2's
-  capacity matching tractable, because the residual network's trainable parameters can be
-  counted against the black-box's, whereas a loss penalty changes the objective rather than
-  the capacity. That is a structural reason and it is sufficient on its own.
+  Approach slot can pin it when methods are fixed: capacity matching is tractable **for**
+  additive-residual, because the residual network's trainable parameters can be counted
+  against the black-box's, so choosing it does not forfeit the matched comparison C2
+  commits to. That much is true. **It is not a reason to prefer additive-residual over a
+  loss penalty, and the comparative reason is still owed at `outline-draft`.**
+
+  **Corrected twice; do not read this as settled.** Round 2 (B4) struck the first version,
+  which argued that Ebert-Panchal is "an empirical algebraic threshold correlation, not a
+  PDE — there is no governing equation to enforce in the loss." That is refuted by the
+  equation written above: `dRf/dt = a1*Re^b1*exp(-Ea/(R*Tf)) - c1*tau_w` is an **ODE**, and
+  loss penalties on ODE residuals are ordinary. Round 3 then struck the replacement's
+  comparative clause, which had claimed a loss penalty "changes the objective rather than
+  the capacity" and so is the harder case for capacity matching. @gallup2023physics shows
+  the reverse in its own setup: because a loss penalty leaves the architecture untouched,
+  its loss model and its baseline are literally the same six-layer, 20-node network —
+  matched by construction. The architectural hybrid is the one model whose capacity had to
+  drift. On the capacity-matching axis the loss-penalty variant is **cleaner** than
+  additive-residual, not messier.
+
+  Two rounds, two failed reasons. A genuine comparative justification cannot be manufactured
+  at `lit-review` because it depends on the methods decision, so it is owed when `Approach`
+  is pinned. Until then the architecture choice stands on the non-comparative statement
+  above and on nothing else. A loss-penalty variant on the Ebert-Panchal ODE residual is a
+  **feasible alternative deliberately not taken**, and the paper must say so: the one cited
+  precedent found that family generalizing far better, so a referee will ask.
 
   **Corrected on 2026-09-11 (round 2 critic, B4).** The first version of this justification
   also argued that Ebert-Panchal is "an empirical algebraic threshold correlation, not a PDE
@@ -211,3 +232,41 @@ a pipeline-validation workload rather than a submission (see `CLAUDE.md`).
   from the abstract and is **provisional**.
 - The Round-1 "Relation to the paper's Gap" paragraph near the top of this note is stale:
   it says the Gap cites all three original sources, which the rewritten Gap does not.
+
+---
+
+# Round 3 critic review (2026-09-11) — verdict `pass`
+
+All five Gap assertions about @gallup2023physics were re-checked line by line against the
+DOE accepted manuscript and are correct: hybrid hidden layers 5 nodes (§3.2), baseline six
+layers of 20 (§4), no paired test anywhere (the one statistical display, Figure 10's
+boxplot, is in-range and unpaired), "only generalized slightly better than the baseline"
+(§4.3, the source's own words; 4.50% vs 6.38% out of range), loss-penalty PINN far ahead of
+both (2.28% out of range, "generalized better than any other model", §5.2).
+
+Two things the review corrected in our favour, recorded so they are not undone later.
+
+- **Do not import "in the hybrid's disfavour" into the manuscript.** The round-3 commit
+  message used that phrase; the Gap does not, and the Gap is right. Smaller capacity is not
+  monotonically worse for extrapolation — an under-parameterised model can extrapolate
+  better by fitting in-range structure less — and the manuscript shows the hybrid is not
+  capacity-starved in range (0.80% vs the baseline's 0.85%). Scaling it to six layers of 20
+  could plausibly make its extrapolation *worse*. The direction is undetermined, which is
+  exactly why "confounds capacity with effect" is the right claim and a directional one
+  would be an overreach.
+- The Gap compares the hybrid's *hidden* layers against the baseline's *six layers*, which
+  includes the output layer. Both phrases are the source's own, so this is faithful, but it
+  is an asymmetry a referee will re-check.
+
+## Carried to `novelty-check`
+
+The trailing clause "and nothing addresses shell-and-tube fouling resistance **at all**"
+is true on the coherent reading — among matched-capacity comparisons of this kind, none is
+on shell-and-tube — but read literally it is false and contradicted by this project's own
+registry: @he2025machine trains surrogates on CFD-simulated shell-and-tube fouling data,
+and `ikram2023comparative` (read, dropped only for corrupt Crossref author metadata)
+compares models for shell-and-tube fouling resistance directly. "at all" is an intensifier
+on a clause that needs a restrictor. The three-word fix needs no new reading:
+**"and no such comparison addresses shell-and-tube fouling resistance."** Pair it with
+clearing the stale round-1 paragraph near the top of this note, which still says the Gap
+"cites all three" of the original sources.
