@@ -7,6 +7,33 @@
 - **분야:** 공학 / 에너지(실험, 공정 해석, AI 설계, 공정설계)
 - **작성 언어:** 영어
 
+> **⚠️ 이 저장소의 논문은 투고용이 아닙니다.**
+>
+> 위 가제의 파울링 논문은 이 템플릿의 파이프라인을 실제로 밟아보며 **개선점을 찾기 위한 검증용 워크로드**입니다. 실제 저널에 제출하지 않습니다. 발견한 개선점은 `docs/notes/pipeline-findings.md`에 기록합니다.
+>
+> 이것이 규칙을 느슨하게 해도 된다는 뜻은 **아닙니다. 정반대입니다.** 규칙을 그대로 밟아야만 어디가 걸리는지 드러나므로, 읽지 않은 출처 등록·근거 없는 상태 변경·자동 승인 같은 지름길은 검증 자체를 무의미하게 만듭니다. 다만 다음 두 가지는 다르게 적용합니다.
+>
+> - **학술적 완결성은 목표가 아닙니다.** 미해결 인용 추적, 유료 PDF 확보, 리뷰 대신 원전 입수 같은 작업은 실제 투고에는 필요하지만 여기서는 비용만 큽니다. 열린 리스크로 기록하고 넘어갑니다.
+> - **`submission-manage`는 실제 저널로 실행하지 않습니다.** 픽스처 투고처로만 연습합니다.
+>
+> 검토 결과를 읽을 때도 기준이 다릅니다. "문헌 커버리지가 부족하다"는 지적은 여기서는 기록 후 진행 대상이고, **"파이프라인이 무언가를 잘못 처리했다"는 지적이 실제 수확**입니다.
+>
+> **이 템플릿으로 실제 논문을 시작한다면 이 인용 블록 전체를 삭제하세요.**
+>
+> ### 신규 논문을 시작할 때
+>
+> 검증용 작성은 **거기서 중단하고**, 아래를 모두 마친 뒤 `story-brief`부터 새로 시작합니다. 검증용 산출물이 한 조각이라도 남으면 새 논문이 남의 주장과 남의 출처를 물려받은 채 출발합니다.
+>
+> 1. 이 인용 블록 전체를 삭제하고, 위의 가제·분야·언어를 새 논문 것으로 교체합니다.
+> 2. `.omc/paper-state.md`의 모든 단계를 `status: not-started`, `round: 0/3`, 빈 verdict·issues로 되돌립니다.
+> 3. `docs/notes/story-brief.md`의 서사 슬롯을 `_입력 필요_`로, 주장 원장과 반증 조건을 빈 표로 되돌립니다.
+> 4. `docs/notes/retrieved-sources.json`을 `[]`로 비웁니다.
+> 5. `docs/notes/`의 주제 노트·`novelty-matrix.md`·`revision-log.md`, `docs/sections/`의 본문, `docs/outline.md`의 내용, `refs/references.bib`의 항목, `figures/`·`data/processed/`의 산출물, `submissions/`의 투고 폴더와 로그를 비웁니다. `docs/sources/`는 커밋되지 않으므로 로컬에서 지웁니다.
+> 6. `docs/notes/pipeline-findings.md`는 **템플릿 저장소에만** 남깁니다. 파생 저장소에서는 삭제합니다.
+> 7. `python scripts/check_paper_state.py --state .omc/paper-state.md`와 `python scripts/verify_story_brief.py --state .omc/paper-state.md --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json`가 빈 상태에서 통과하는지 확인합니다.
+>
+> 이 초기화는 아직 스크립트가 없어 손으로 합니다 — `pipeline-findings.md`의 F7 참고.
+
 ## 작업 흐름
 
 이 프로젝트는 `.omc/paper-state.md`와 `.claude/skills/` 아래의 스킬로 진행합니다. 단계를 건너뛰거나 `refs/references.bib`를 직접 작성하지 마세요.
