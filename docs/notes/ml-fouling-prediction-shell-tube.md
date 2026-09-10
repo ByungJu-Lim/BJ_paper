@@ -131,3 +131,73 @@ Rewriting a narrative slot is a user-approval gate, so the slot is left unchange
    modelling"*, `10.1016/j.bej.2022.108761`, whose framing looks directly relevant.
 4. No source yet establishes that a *shell-and-tube-specific* simulator behaves as the C0 falsifier
    assumes; @coletti2011dynamic and @dazbejarano2016new support plausibility but are abstract-only.
+
+---
+
+# Round 1 critic review (2026-09-11) — verdict `revise`
+
+The review is recorded in full in `.omc/paper-state.md`. Five blockers. The user
+decided on 2026-09-11 to act on the two argument-level ones (M1, M2) and to carry
+the three literature-coverage ones as open risks, on the grounds that this paper is
+a pipeline-validation workload rather than a submission (see `CLAUDE.md`).
+
+## Acted on
+
+- **M1 — the Gap was defended on the weaker ground.** It rested on "a CSTR, not
+  shell-and-tube", which reads as salami-slicing. The stronger ground was already in
+  this note and left out of the sentence: @gallup2023physics is a **single trial with
+  no repeated seeds, no paired test, and capacity matching unconfirmed**. A comparison
+  that underpowered settles the question at no system at all, so the gap is evidential
+  quality, with shell-and-tube fouling as the setting rather than the justification.
+- **M2 — the Gap omitted the half that threatens this paper.** In that same study the
+  **loss-penalty PINN generalized far better** than the conjunction/residual model.
+  The one cited precedent therefore argues against the architecture this paper chooses,
+  and that has to be stated rather than omitted.
+
+  The affirmative reason for choosing additive-residual anyway, recorded here so the
+  Approach slot can pin it when methods are fixed: a loss-penalty PINN needs a
+  differential residual to penalize, and Ebert-Panchal is an **empirical algebraic
+  threshold correlation, not a PDE** — there is no governing equation to enforce in the
+  loss. Additive-residual is also what makes C2's capacity matching tractable, since the
+  residual network's trainable parameters can be counted against the black-box's, whereas
+  a loss penalty changes the objective rather than the capacity. This is a structural
+  reason, not a preference, and it should be stated in the paper as such.
+
+## Carried as open risks, not acted on
+
+- **B1 — the additive-residual structure has an unregistered canonical origin.**
+  Searching "discrepancy modeling", which this round did not try, returns
+  **Kennedy & O'Hagan (2001), "Bayesian Calibration of Computer Models",
+  `10.1111/1467-9868.00294`** — the paper that introduced the `y = eta(x) + delta(x) + eps`
+  form this hybrid *is* — and **Willard et al., `10.1145/3514228`**, whose taxonomy names
+  "residual modeling" directly. Neither is registered. This is the most substantive open
+  risk of the three: Kennedy & O'Hagan's result that the discrepancy term is weakly
+  identifiable, and that identification degrades away from the calibration region, bears
+  directly on C0 ("the residual term has real work to do") and on C2's extrapolation
+  premise. Whether that caveat binds under a fully simulated, known-noise design is an
+  open question and must not be assumed either way. **Revisit before C0 is exercised in
+  `code-experiment`.**
+- **B2** — Rogers et al. (2022), `10.1016/j.bej.2022.108761`, on hybrid-model "greyness",
+  is listed above as unresolved but is open access and was not attempted.
+- **B3** — @mcbride2020hybrid is registered `full-text` while its "5 Hybrid Models"
+  section, the load-bearing one for the claim it is cited for, was not traversed. The
+  critic judged @bradley2022perspectives' `full-text` defensible on the same test, since
+  the sections actually read carry the distinction it is cited for. Finishing one section
+  of an already-obtained PDF would settle B3; until then treat the registry value as
+  optimistic.
+- **M3, required before `code-experiment`** — C0's falsifier is testable in form but
+  **biased in the direction of confirming C0**: if the Ebert-Panchal parameters were
+  mangled in transcription, the residual-free correlation predicts worse, its
+  extrapolation RMSE rises, and C0 is left un-refuted for the wrong reason. Record the
+  parameter provenance in the run manifest with the page or table it was verified
+  against, and add a sanity gate — if the residual-free correlation's RMSE exceeds the
+  black-box's extrapolation RMSE, treat that as a transcription-error signal rather than
+  as evidence for C0.
+- **M4** — the Gap should scope its negative to the searches run and the date rather than
+  asserting a universal negative while `10.1016/j.rineng.2026.112383` is unread.
+- Unexamined: Sansana et al. (2021), cited inside @bradley2022perspectives; and
+  `10.2139/ssrn.6837407` (2026 SSRN, heat-exchanger hybrid PIML, likely control-oriented).
+- @bonfanti2024generalization's "loss-penalty family, not a Gap threat" judgment is made
+  from the abstract and is **provisional**.
+- The Round-1 "Relation to the paper's Gap" paragraph near the top of this note is stale:
+  it says the Gap cites all three original sources, which the rewritten Gap does not.
