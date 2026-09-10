@@ -1,0 +1,23 @@
+# Windows authoring, Ubuntu CI, a public mirror. Without a declared policy the
+# line endings are whatever each clone's core.autocrlf happens to be, which is
+# why a file nobody edited can sit in `git status` indefinitely.
+#
+# Normalise every text file to LF in the repository and in the working tree.
+# Everything here is Markdown, Python, JSON, YAML or BibTeX; none of it wants
+# CRLF, and .githooks/pre-push is a shell script that would break with it.
+* text=auto eol=lf
+
+# Figures are the one place a stray newline is unrecoverable rather than
+# cosmetic: a TIFF or PDF mangled by end-of-line translation is a desk reject.
+# Declared ahead of the files themselves so the rule is in place before the
+# first render lands.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.tif   binary
+*.tiff  binary
+*.eps   binary
+*.pdf   binary
+*.zip   binary
+*.xlsx  binary
+*.docx  binary

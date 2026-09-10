@@ -1,0 +1,40 @@
+# Retractions do not announce themselves on the commit that introduced them.
+#
+# verify.yml runs on every push and stays offline on purpose: it must not go red
+# because Crossref was slow. But that leaves DOI resolution and retraction
+# screening running only when a human reaches a gate - lit-review completion,
+# citation-manage, the submission preflight. A source retracted after it was
+# registered stays silently valid until then.
+#
+# This job asks the network on a schedule instead, so the answer arrives as a
+# red run rather than as a reviewer's email.
+name: Sources
+
+on:
+  schedule:
+    # Mondays, 06:00 UTC. GitHub suspends scheduled workflows in a repository
+    # with no activity for 60 days; a manual run re-arms it.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Resolve every DOI and screen for retractions
+        # CROSSREF_MAILTO is optional: it only buys the Crossref polite pool.
+        # An unset secret expands to an empty string, which the verifier treats
+        # as "no contact address" rather than failing. Keeping the address in a
+        # secret rather than in this file keeps it out of the public mirror.
+        run: |
+          python scripts/verify_source_registry.py \
+            --registry docs/notes/retrieved-sources.json \
+            --online \
+            --mailto "${{ secrets.CROSSREF_MAILTO }}"
