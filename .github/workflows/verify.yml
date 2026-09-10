@@ -34,3 +34,5 @@ jobs:
         run: python scripts/check_submissions.py --log submissions/submission-log.md
       - name: Verify citations and bibliography
         run: python scripts/verify_citations.py --state .omc/paper-state.md --registry docs/notes/retrieved-sources.json --sections "docs/sections/*.md" --bib refs/references.bib
+      - name: Re-run recorded experiments
+        run: python scripts/rerun_manifest.py --all

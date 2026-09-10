@@ -48,12 +48,17 @@ submission tag to a new commit.
    that does not resolve:
    ```bash
    python -m unittest discover -s tests
+   python scripts/rerun_manifest.py --all
    python scripts/check_submissions.py --log submissions/submission-log.md --preflight
    python scripts/check_paper_state.py --state .omc/paper-state.md
    python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online
    python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --bib refs/references.bib
    python scripts/verify_story_brief.py --brief docs/notes/story-brief.md --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --state .omc/paper-state.md --check-manifests --require-slots all --require-coverage
    ```
+   The re-run is the slow one and the only one that answers "does this still
+   reproduce". Run it on the frozen code, not on a working tree you are still
+   editing; a venue that asks for a replication package is asking for exactly
+   this to pass on someone else's machine.
 8. Freeze the complete verified package before transmission. Commit the manuscript,
    references, venue profile, rendered figures, cover letter, and response files.
    Require `git status --porcelain` to be empty, then read `git rev-parse HEAD`
