@@ -24,4 +24,47 @@ description: Writes and runs experiment/analysis code, producing processed data 
    }
    ```
    Use an integer seed or JSON `null` for deterministic code without randomness. Paths are relative to the project root, remain inside it and must exist: script under `code/`, nonempty inputs, and result outputs under `data/processed/`. The manifest itself is not a result output. Record full package versions (or `{}` for stdlib-only code). For nondeterminism, record its cause under `nondeterminism` and report repeated-run variability.
-5. Run `python scripts/verify_story_brief.py --check-manifests --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json`. This checks structure and files, not scientific validity. Re-run the recorded command when verifying reproducibility, compare its results, then hand the evidence to `critic` through `paper-supervise`. Results/figures may consume it only after this stage is approved.
+5. Check the manifest's structure, then check that the run actually reproduces.
+   These are two different questions and only the first one is cheap:
+   ```bash
+   python scripts/verify_story_brief.py --check-manifests --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json
+   python scripts/rerun_manifest.py --all
+   ```
+   The first proves the manifest is well formed and its files exist. The second
+   re-executes the recorded command and compares the regenerated outputs byte for
+   byte against the committed ones. Until it passes, `run:<run-id>` means "a file
+   was produced once", not "this result reproduces" — and a result that cannot be
+   regenerated cannot be defended to a reviewer.
+
+   The originals are stashed and restored, so the check cannot overwrite results
+   the manuscript already cites. If the re-run diverges, do not paper over it:
+   either seed the nondeterminism away, or record what varies and why in a
+   `nondeterminism` field on the manifest and report the run-to-run spread in the
+   Results section. A declared `nondeterminism` makes the difference reportable,
+   not invisible.
+
+   Then hand the evidence to `critic` through `paper-supervise`. Results and
+   figures may consume it only after this stage is approved.
+
+## Statistical design review
+
+Run this before the experiment, not after the numbers arrive — every item is a
+decision the story brief already made, and re-deciding it once you have seen the
+result is how a comparison stops meaning anything.
+
+| Check | Why it bites |
+|---|---|
+| Every reported comparison has a falsifier written in the brief, with its threshold and test named | A threshold chosen after seeing the gap is not a test |
+| The test matches the design — paired data gets a paired test, and the pairing is real (same seeds, same splits, same tuning budget across arms) | An unpaired test on paired data throws away the design's own power |
+| Repetition count is justified against the effect size the brief claims, not inherited from habit | 10 seeds is a choice; say what it can and cannot detect |
+| What varies between repetitions is enumerated (initialization, split, noise draw) and what stays fixed is fixed | A "seed" that also changes the data is two experiments |
+| Capacity/tuning parity between arms is measured and recorded, not asserted | "Matched" is a number in the manifest or it is not a fact |
+| Every comparison actually run is reported, including the ones that went the wrong way | Reporting the surviving comparison is how a p-value stops meaning what it says |
+| Multiple comparisons are counted and handled, or the family is declared and the count reported | Three tests at p<0.05 is not one test at p<0.05 |
+| The metric, its units, and the target it is scored against (noisy or clean) are identical across arms and stated | Two arms scored differently are not compared |
+| Held-out data was held out before tuning, not after | A test set used for selection is a validation set |
+| The noise model and its magnitude are recorded in the manifest | A floor you cannot state is a floor you cannot claim to be above |
+
+An item that fails is a `revise` verdict, not a footnote. If the design has
+already been run and an item cannot be satisfied retroactively, say so in
+Limitations rather than restating the claim more weakly.

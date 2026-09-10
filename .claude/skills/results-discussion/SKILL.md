@@ -27,3 +27,24 @@ description: Analyzes processed experiment data and drafts the Results and Discu
    python scripts/verify_story_brief.py --check-manifests --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json
    ```
 5. Hand off Results, Discussion and Conclusion to `critic` through the `paper-supervise` loop, then stop for each section's user gate. Verify the prose matches its declared claims; structural validation alone cannot establish that correspondence.
+
+## Reporting review
+
+The statistical design was reviewed in `code-experiment`, before the numbers
+existed. This pass checks that the write-up reports what that design actually
+produced.
+
+| Check | Failure it catches |
+|---|---|
+| Every number in the prose traces to a run manifest, and the run reproduces (`python scripts/rerun_manifest.py --all`) | A figure quoted from a superseded run |
+| Effect sizes are reported with the test, not a p-value alone | "Significant" with no magnitude is not a result |
+| The interval reported is named (SD, SE, CI, IQR) and its repetition count stated | An unnamed ± is uninterpretable |
+| Every comparison the design ran appears, including the ones that went the wrong way | Selective reporting, which is what makes the surviving p-value meaningless |
+| A `refuted` claim is reported as a negative result in its own right, not quietly dropped or restated more weakly | Rewriting the hypothesis around the answer |
+| No claim still `assumed` is stated in the indicative in Results, Discussion, or Conclusion | The validator catches the declaration; only a reader catches the sentence |
+| Discussion separates what was measured from what it implies, and marks which is which | Implication presented as finding |
+| Limitations name the design choices that bound the claim (simulation vs. measured data, split rule, seed count), not generic caveats | "More work is needed" is not a limitation |
+| The Conclusion claims no more than the Results section established | Where papers most often overreach |
+
+An item that fails is a `revise` verdict. If a number cannot be traced to a
+manifest, the fix is to re-run the experiment, not to soften the sentence.
