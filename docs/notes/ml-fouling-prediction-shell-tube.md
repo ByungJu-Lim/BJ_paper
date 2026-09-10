@@ -155,13 +155,23 @@ a pipeline-validation workload rather than a submission (see `CLAUDE.md`).
   and that has to be stated rather than omitted.
 
   The affirmative reason for choosing additive-residual anyway, recorded here so the
-  Approach slot can pin it when methods are fixed: a loss-penalty PINN needs a
-  differential residual to penalize, and Ebert-Panchal is an **empirical algebraic
-  threshold correlation, not a PDE** — there is no governing equation to enforce in the
-  loss. Additive-residual is also what makes C2's capacity matching tractable, since the
-  residual network's trainable parameters can be counted against the black-box's, whereas
-  a loss penalty changes the objective rather than the capacity. This is a structural
-  reason, not a preference, and it should be stated in the paper as such.
+  Approach slot can pin it when methods are fixed: additive-residual is what makes C2's
+  capacity matching tractable, because the residual network's trainable parameters can be
+  counted against the black-box's, whereas a loss penalty changes the objective rather than
+  the capacity. That is a structural reason and it is sufficient on its own.
+
+  **Corrected on 2026-09-11 (round 2 critic, B4).** The first version of this justification
+  also argued that Ebert-Panchal is "an empirical algebraic threshold correlation, not a PDE
+  — there is no governing equation to enforce in the loss." That is refuted by the equation
+  written twenty lines above it: `dRf/dt = a1*Re^b1*exp(-Ea/(R*Tf)) - c1*tau_w` is an
+  **ODE**, and physics-informed loss penalties are routinely applied to ODE residuals.
+  Forming `(dRf/dt)_pred - f(Re, Tf, tau_w)` as a loss term is entirely available. The
+  claimed obstacle does not exist, so the argument is withdrawn rather than defended.
+
+  A loss-penalty variant on the Ebert-Panchal ODE residual is therefore a **feasible
+  alternative deliberately not taken**, and the paper should say so. Given that
+  @gallup2023physics found exactly that family generalizing far better, a referee will ask;
+  naming it as a considered and declined option is a better answer than having it found.
 
 ## Carried as open risks, not acted on
 

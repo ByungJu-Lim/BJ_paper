@@ -16,7 +16,7 @@ sharp enough.
 | Slot | Sentence |
 |---|---|
 | Context | Fouling in shell-and-tube heat exchangers used across power and process industries progressively degrades heat-transfer performance and raises energy consumption, so operators need fouling-resistance models accurate enough to schedule cleaning before the loss becomes costly. |
-| Gap | No adequately powered study decides whether an additive-residual physics-informed hybrid beats a capacity-matched black-box outside the training envelope: the one precedent, @gallup2023physics, runs that comparison a single time on a CSTR - no repeated seeds, no paired test, capacity matching unconfirmed - and finds the residual hybrid only slightly ahead of the baseline while a loss-penalty PINN generalizes far better, so the question is open for shell-and-tube fouling resistance and for the structure generally. |
+| Gap | On the searches run through 2026-09, no matched-capacity comparison decides whether an additive-residual physics-informed hybrid beats a black-box outside the training envelope: the one precedent, @gallup2023physics, gives its hybrid 5-node hidden layers against the baseline's six layers of 20 and reports no paired test, so its result - the hybrid slightly ahead, a loss-penalty PINN far ahead of both - confounds capacity with effect, and nothing addresses shell-and-tube fouling resistance at all. |
 | Question | For shell-and-tube heat exchanger fouling resistance simulated by a mechanistic fouling model, does embedding a physics-based fouling correlation inside a machine-learning surrogate lower RMSE on operating conditions held outside the training envelope, compared to a capacity-matched purely data-driven model? |
 | Approach | _입력 필요_ |
 | Finding | _입력 필요_ |
