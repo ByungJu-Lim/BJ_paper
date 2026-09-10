@@ -21,6 +21,18 @@ FAILING = """import sys
 sys.exit(3)
 """
 
+CORRUPTS_THEN_FAILS = """open('data/processed/out.csv', 'w').write('PARTIAL')
+import sys
+sys.exit(3)
+"""
+
+WRITES_UNDECLARED = """import csv
+rows = list(csv.reader(open('data/raw/input.csv')))
+with open('data/processed/out.csv', 'w', newline='') as handle:
+    csv.writer(handle).writerows(rows)
+open('data/processed/extra.csv', 'w').write('undeclared')
+"""
+
 
 def sandbox(tmp: str, body: str, manifest_extra: dict | None = None,
             command: str | None = None) -> tuple[Path, Path]:
@@ -154,6 +166,56 @@ class TestRerunManifest(unittest.TestCase):
             produce(root)
             _, report = rerun(manifest, root, 120, True, False)
             self.assertIn('python 0.0.0 recorded', '\n'.join(report))
+
+    def test_keep_rerun_is_honoured_when_the_command_fails(self):
+        # The flag is an explicit opt-in; overriding it on the failure path
+        # would silently withhold exactly the partial output you asked to see.
+        with TemporaryDirectory() as tmp:
+            root, manifest = sandbox(tmp, DETERMINISTIC)
+            produce(root)
+            (root / 'code/run.py').write_text(CORRUPTS_THEN_FAILS, encoding='utf-8')
+            output = root / 'data/processed/out.csv'
+            reproduced, _ = rerun(manifest, root, 120, False, True)
+            self.assertFalse(reproduced)
+            self.assertEqual(output.read_text(encoding='utf-8'), 'PARTIAL')
+
+    def test_default_still_restores_when_the_command_fails(self):
+        with TemporaryDirectory() as tmp:
+            root, manifest = sandbox(tmp, DETERMINISTIC)
+            produce(root)
+            output = root / 'data/processed/out.csv'
+            before = output.read_bytes()
+            (root / 'code/run.py').write_text(CORRUPTS_THEN_FAILS, encoding='utf-8')
+            rerun(manifest, root, 120, False, False)
+            self.assertEqual(output.read_bytes(), before)
+
+    def test_undeclared_result_fails_the_run(self):
+        # A file under the evidence directory that no manifest names cannot be
+        # traced back to a run, which is the invariant run:<run-id> rests on.
+        with TemporaryDirectory() as tmp:
+            root, manifest = sandbox(tmp, WRITES_UNDECLARED)
+            produce(root)
+            reproduced, report = rerun(manifest, root, 120, False, False)
+            text = chr(10).join(report)
+            self.assertFalse(reproduced, text)
+            self.assertIn('undeclared result', text)
+            self.assertIn('data/processed/extra.csv', text)
+
+    def test_undeclared_result_is_left_in_place(self):
+        with TemporaryDirectory() as tmp:
+            root, manifest = sandbox(tmp, WRITES_UNDECLARED)
+            produce(root)
+            rerun(manifest, root, 120, False, False)
+            self.assertTrue((root / 'data/processed/extra.csv').is_file())
+
+    def test_declaring_the_extra_output_makes_the_run_pass(self):
+        with TemporaryDirectory() as tmp:
+            root, manifest = sandbox(
+                tmp, WRITES_UNDECLARED,
+                {'outputs': ['data/processed/out.csv', 'data/processed/extra.csv']})
+            produce(root)
+            reproduced, report = rerun(manifest, root, 120, False, False)
+            self.assertTrue(reproduced, chr(10).join(report))
 
 
 class TestSweep(unittest.TestCase):

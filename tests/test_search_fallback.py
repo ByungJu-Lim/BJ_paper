@@ -146,6 +146,25 @@ class TestCombinedSearch(unittest.TestCase):
         self.assertEqual(len(result["candidates"]), 2)
         self.assertEqual(result["total_matches"], 5)
 
+    def test_distinct_works_sharing_a_title_both_survive(self):
+        # Dropping one of two different papers because their titles match is
+        # the failure this script exists to prevent.
+        items = [article(DOI=None, author=[{"given": "A", "family": "One"}],
+                         published={"date-parts": [[2020, 1, 1]]}, type="report"),
+                 article(DOI=None, author=[{"given": "B", "family": "Two"}],
+                         published={"date-parts": [[2023, 1, 1]]}, type="report")]
+        result = search("fouling", source="crossref", today=TODAY,
+                        fetchers=stub(payload=crossref_payload(items, total=2)))
+        self.assertEqual(len(result["candidates"]), 2)
+        self.assertEqual([c["entry"]["key"] for c in result["candidates"]],
+                         ["one2020machine", "two2023machine"])
+
+    def test_the_same_undoi_work_twice_is_still_deduplicated(self):
+        item = article(DOI=None, type="report")
+        result = search("fouling", source="crossref", today=TODAY,
+                        fetchers=stub(payload=crossref_payload([item, dict(item)], total=2)))
+        self.assertEqual(len(result["candidates"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

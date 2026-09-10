@@ -37,7 +37,10 @@ description: Writes and runs experiment/analysis code, producing processed data 
    regenerated cannot be defended to a reviewer.
 
    The originals are stashed and restored, so the check cannot overwrite results
-   the manuscript already cites. If the re-run diverges, do not paper over it:
+   the manuscript already cites. It also fails when the run writes anything under
+   `data/processed/` that the manifest does not declare — a result nothing names
+   cannot be traced, which is the whole point of `run:<run-id>`. Add it to
+   `outputs` or stop writing it. If the re-run diverges, do not paper over it:
    either seed the nondeterminism away, or record what varies and why in a
    `nondeterminism` field on the manifest and report the run-to-run spread in the
    Results section. A declared `nondeterminism` makes the difference reportable,

@@ -165,6 +165,13 @@ def crossref_candidate(work: dict, today: date) -> dict:
 # --- arXiv ------------------------------------------------------------------
 
 def fetch_arxiv(query: str, limit: int, mailto: str | None, from_year: int | None) -> bytes:
+    """`from_year` is deliberately unused here.
+
+    The signature matches `fetch_crossref` so both are interchangeable at the
+    `fetchers` injection point, but arXiv's query syntax has no equivalent of
+    Crossref's from-pub-date filter that is reliable across its date fields.
+    `search()` filters the parsed entries by year instead.
+    """
     params = {"search_query": f"all:{query}", "start": "0",
               "max_results": str(min(limit, 100)),
               "sortBy": "relevance", "sortOrder": "descending"}
@@ -248,13 +255,18 @@ def search(query: str, limit: int = 10, source: str = "both", mailto: str | None
 
     # The same work from both APIs: keep the first, which is Crossref's
     # published record rather than the preprint of it.
+    #
+    # Without a DOI, dedupe on the candidate key rather than the title alone.
+    # Two distinct works can share a title, and dropping one of them is the
+    # exact failure this script exists to prevent - a search that quietly
+    # decides a paper does not exist.
     deduplicated: list[dict] = []
     seen: set[str] = set()
     for candidate in candidates:
+        entry = candidate["entry"]
         # DOIs are case-insensitive by spec; arXiv issues 10.48550/arXiv.*
         # while Crossref reports the same DOI lowercased.
-        marker = (candidate["entry"].get("doi")
-                  or candidate["entry"]["title"]).casefold()
+        marker = (entry.get("doi") or entry["key"]).casefold()
         if marker and marker in seen:
             continue
         seen.add(marker)

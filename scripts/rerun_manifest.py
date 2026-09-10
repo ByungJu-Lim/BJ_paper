@@ -13,7 +13,13 @@ regenerated outputs, byte for byte, against the ones already committed.
 The originals are copied aside before the command runs and restored afterwards,
 so a failed or nondeterministic re-run cannot quietly overwrite the results the
 manuscript already cites. Pass --keep-rerun to leave the regenerated files in
-place instead.
+place instead - including the partial output of a run that failed, which is the
+point of the flag and also its hazard.
+
+Restoring covers the outputs the manifest declares. A run that writes anything
+else under data/processed is reported as a failure rather than tidied away: an
+untraceable file in the evidence directory is a manifest that does not describe
+its own run.
 
 A manifest may declare `nondeterminism` (a string saying what varies and why).
 Differing bytes are then reported as declared variance rather than a failure -
@@ -110,6 +116,18 @@ def command_is_safe(manifest: dict) -> str | None:
     return None
 
 
+def _snapshot(directory: Path) -> dict[Path, int]:
+    """Modification times for everything under the evidence directory.
+
+    Detecting only files that *appear* would miss the usual case: a manifest is
+    written after its run, so an undeclared result already exists by the time
+    anyone re-runs. What marks it is that the re-run writes to it again.
+    """
+    if not directory.is_dir():
+        return {}
+    return {path: path.stat().st_mtime_ns for path in directory.rglob('*') if path.is_file()}
+
+
 def _restore(outputs: list[Path], stash: Path) -> None:
     for index, path in enumerate(outputs):
         source = stash / f'{index}.bin'
@@ -118,7 +136,7 @@ def _restore(outputs: list[Path], stash: Path) -> None:
 
 
 def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
-          keep_rerun: bool) -> tuple[bool, list[str]]:
+          keep_rerun: bool, processed_dir: Path | None = None) -> tuple[bool, list[str]]:
     report: list[str] = []
     try:
         manifest = load_manifest(manifest_path)
@@ -148,6 +166,8 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
         return True, report
 
     before = {path: digest(path) for path in outputs}
+    evidence_dir = (processed_dir or (root / DEFAULT_PROCESSED_DIR)).resolve()
+    before_files = _snapshot(evidence_dir)
     declared_variance = str(manifest.get('nondeterminism', '')).strip()
     differing: list[str] = []
     missing: list[str] = []
@@ -161,12 +181,14 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
                                        text=True, encoding='utf-8', errors='replace',
                                        timeout=timeout)
         except subprocess.TimeoutExpired:
-            _restore(outputs, stash)
+            if not keep_rerun:
+                _restore(outputs, stash)
             report.append(f'  FAIL: command exceeded {timeout}s')
             return False, report
 
         if completed.returncode != 0:
-            _restore(outputs, stash)
+            if not keep_rerun:
+                _restore(outputs, stash)
             report.append(f'  FAIL: command exited {completed.returncode}')
             tail = (completed.stderr or completed.stdout or '').strip().splitlines()[-10:]
             report.extend(f'    | {line}' for line in tail)
@@ -179,9 +201,21 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
             elif digest(path) != before[path]:
                 differing.append(relative)
 
+        declared = set(outputs) | {manifest_path.resolve()}
+        undeclared = sorted(
+            path.relative_to(root).as_posix()
+            for path, mtime in _snapshot(evidence_dir).items()
+            if path not in declared and before_files.get(path) != mtime)
+
         if not keep_rerun:
             _restore(outputs, stash)
 
+    for relative in undeclared:
+        report.append(f'  FAIL: wrote an undeclared result: {relative}')
+    if undeclared:
+        report.append('  add it to the manifest outputs, or stop writing it - a result '
+                      'under the evidence directory that no manifest names cannot be traced')
+        report.append('  left in place: removing a file this script did not create is not its call')
     for relative in missing:
         report.append(f'  FAIL: rerun did not regenerate {relative}')
     for relative in differing:
@@ -191,7 +225,7 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
         report.append(f'  nondeterminism: {declared_variance}')
         report.append('  weigh the recorded run-to-run variability; differing bytes do not settle this')
 
-    reproduced = not missing and (not differing or bool(declared_variance))
+    reproduced = not missing and not undeclared and (not differing or bool(declared_variance))
     if reproduced and not differing:
         report.append(f'  reproduced: {len(outputs)} output(s) identical')
     return reproduced, report
@@ -209,7 +243,9 @@ def main() -> int:
     parser.add_argument('--dry-run', action='store_true',
                         help='report what would run, execute nothing')
     parser.add_argument('--keep-rerun', action='store_true',
-                        help='leave regenerated outputs in place instead of restoring the originals')
+                        help='leave regenerated outputs in place instead of restoring the originals; '
+                             'this applies to a failed run too, so partial output can overwrite '
+                             'a committed result')
     args = parser.parse_args()
 
     root = Path.cwd().resolve()
@@ -230,7 +266,8 @@ def main() -> int:
 
     failures = 0
     for manifest_path in manifests:
-        reproduced, report = rerun(manifest_path, root, args.timeout, args.dry_run, args.keep_rerun)
+        reproduced, report = rerun(manifest_path, root, args.timeout, args.dry_run,
+                                   args.keep_rerun, args.processed_dir)
         print('\n'.join(report))
         if not reproduced:
             failures += 1
