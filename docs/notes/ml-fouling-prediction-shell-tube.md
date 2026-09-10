@@ -28,3 +28,106 @@ This paper matters more than a typical unread hit: if its "hybrid" category matc
 ## Also dropped
 
 - `ikram2023comparative` (Ikram et al., *Research on Engineering Structures and Materials*, 2023) was found and read at abstract level (FNN-MLP vs NARX vs SVM-RBF for shell-and-tube fouling resistance - another purely data-driven comparison, consistent with the Gap) but its Crossref record has corrupted author metadata (institutional-affiliation strings interleaved into the author list), which fails `verify_source_registry.py`'s exact-match check and cannot be cleanly resolved. Dropped rather than force a match against bad data. Could be re-added later if the publisher's Crossref record is corrected, or by attaching a manual correction note if the project adds one.
+
+---
+
+# Round 2 of lit-review (2026-09-10) — C0 correlation, and the "PINN-only" search blind spot
+
+The first cycle registered three sources and searched the hybrid structure almost
+entirely under the term *PINN*. Two things came out of widening it.
+
+## C0's correlation now has a source (`full-text`)
+
+- **@wilson2017twenty** — Wilson, Ishiyama, Polley (2017), *Heat Transfer Engineering* 38(7-8),
+  DOI `10.1080/01457632.2016.1206407`; read via the open-access Cambridge Apollo deposit of the
+  accepted manuscript (`10.17863/cam.13048`). Writes the **Ebert-Panchal threshold fouling model**
+  out explicitly as deposition minus suppression,
+  `dRf/dt = a1 * Re^b1 * exp(-Ea/(R*Tf)) - c1 * tau_w`,
+  whose operating-condition inputs are exactly the two axes of our simulator design
+  (Reynolds number and film temperature). It also tabulates regressed parameter sets for
+  several published variants (Panchal et al., Polley et al., Yeap et al., Nasr & Givi,
+  Yang & Crittenden), and records that Ebert and Panchal designed the model to support both
+  extrapolation to the zero-fouling threshold and interpolation between measured conditions.
+  This satisfies the first half of C0: a published literature correlation, chosen independently
+  of any simulator we build.
+
+  **Caveat, load-bearing:** the numeric parameter values were extracted by `pdftotext` and
+  show signs of mangled scientific notation. They must be re-read off the source page before
+  any of them is hard-coded in `code/`. Do not copy them from this note.
+
+  The true primary source — Ebert & Panchal, *"Analysis of Exxon crude-oil-slip stream coking
+  data"*, ANL/ES/CP-92175, 1995 — sits behind a bot-check at the UNT Digital Library and was not
+  retrieved. We currently cite a review's transcription of the equation rather than the original.
+
+- **@yang2020computational** — Yang (2020), *Int. J. Heat and Mass Transfer* 159:120129, full text read.
+  3D CFD of the **induction period** of crude-oil fouling, separating reaction-driven from
+  precipitation-driven mechanisms. This supplies the second half of C0: a citable mechanism the
+  Ebert-Panchal form omits, so the residual term has real work to do.
+
+- **@deshannavar2021revisiting** (abstract-only) records a known criticism of the threshold form —
+  some crude oils foul *less* at higher temperature, against the Arrhenius term, and the physical
+  reading of "activation energy" absorbing a velocity effect is questionable. A limitations citation.
+
+- **@coletti2011dynamic** (abstract-only) is now registered: a dynamic, distributed **shell-and-tube**
+  crude-oil fouling model validated against a year of refinery data. Approach-slot support for the
+  simulator being a defensible stand-in, not a C0 correlation (it is a whole model, not a closed form).
+  Same for **@dazbejarano2016new** (abstract-only), a multicomponent reactive-deposit successor.
+
+## The Gap does not survive unchanged
+
+Searching *gray-box* / *semi-parametric* / *hybrid submodeling* / *residual physics* instead of
+*PINN* found the additive-residual structure published widely, and found one direct precedent.
+
+- **@gallup2023physics** — Gallup, Gallup, Powell (2023), *Computers & Chemical Engineering*, full text read.
+  This is the finding that matters. It taxonomizes physics-guided NNs into physics-guided loss,
+  physics-guided architecture, **conjunction** (explicitly including *parallel conjunction*, which it
+  names "residual physics"), and physics-guided initialization. It then builds four surrogates for a
+  **CSTR**, trains them on an inlet-temperature window of 400-420 C, and tests them **outside that
+  window at 430-450 C**, reporting each model's percent-error increase against a black-box baseline.
+  Its result runs against our C2 premise: the architecture-plus-conjunction model (series physics
+  followed by a residual-estimation layer — the closest published analog to our hybrid) generalized
+  only *slightly* better than the baseline, while the pure loss-penalty PINN generalized far better.
+  Single trial, different domain, no repeated seeds and no paired test — but it is a real prior
+  evaluation of a residual hybrid against a black-box under an explicit extrapolation split.
+- **@bradley2022perspectives** (full text, Sections 1-3 read) separates **"Hybrid Submodeling"** —
+  additive models of separate physical and data-driven equations — from physics-informed ML as
+  distinct hybridization families. Exactly the taxonomic distinction our Gap sentence needs to make.
+  It cites a Sansana et al. (2021) comparison of hybrid-model approaches that we have not yet resolved.
+- **@azadi2022hybrid** (abstract-only) applies a first-principles model plus a *parallel* data-based
+  model that "compensates for the deficiencies of the mechanistic model" to a blast furnace —
+  the same structure, under the name "hybrid dynamic model", outside both fouling and PINN language.
+- **@mcbride2020hybrid** (full text, partially traversed — intro and data-driven sections read, the
+  "5 Hybrid Models" section not fully) reviews hybrid semi-parametric modeling in *separation*
+  processes and states qualitatively that data-driven models extrapolate poorly. Not a quantified
+  per-model extrapolation test. Treat as incompletely verified until that section is read.
+- **@bonfanti2024generalization** (abstract-only) studies PINN generalization *outside* the training
+  domain and which hyperparameters drive it. Loss-penalty family, so not a Gap threat — useful as
+  methodology precedent for testing extrapolation at all, and as support for keeping loss-penalty
+  PINNs and additive-residual hybrids as separate categories.
+
+**Consequence:** the Gap can no longer claim that no prior work evaluates a residual-type hybrid
+against a black-box under an extrapolation split. It has to narrow to *shell-and-tube fouling
+resistance*, and cite @gallup2023physics as a directly relevant, partly negative precedent.
+Rewriting a narrative slot is a user-approval gate, so the slot is left unchanged pending that decision.
+
+## Still open
+
+1. **@ichsan2026machine** — the paywalled ScienceDirect review from the last round now has a resolved
+   identity: Ichsan, Hidayat, Pramata, Hantoro, *"Machine learning for heat exchanger fouling
+   prediction: A systematic review of hybrid and non-hybrid approaches for model selection"*,
+   *Results in Engineering* (2026), DOI `10.1016/j.rineng.2026.112383` — confirmed via Crossref to
+   carry PII `S2590123026034018`. Every route to the full text returned a hard block, and on
+   2026-09-10 the user chose to proceed without it, so it is **not registered** - registering a
+   source we have not read would violate the read-before-registering rule, and leaving it as
+   `awaiting-user-file` would hold the whole registry in a failing state. It stays here as an open
+   risk: it is the single most Gap-relevant title found, and a reviewer may well ask why the Gap
+   was fixed without engaging with a 2026 systematic review of exactly hybrid-vs-non-hybrid fouling
+   ML. Revisit before the Gap is treated as final.
+2. `ardsomang2013heat` — the candidate key said 2021, but the DOI `10.36001/phmconf.2013.v5i1.2773`
+   and the landing page both say 2013 (Ardsomang, Hines, Upadhyaya, *PHM Society*). Only the citation
+   page was seen, not the abstract, so it is **not registered** — there is no honest `access` value for it.
+3. Unresolved leads: Sansana et al. (2021), cited by @bradley2022perspectives; and
+   Rogers et al. (2022), *"Investigating 'greyness' of hybrid model for bioprocess predictive
+   modelling"*, `10.1016/j.bej.2022.108761`, whose framing looks directly relevant.
+4. No source yet establishes that a *shell-and-tube-specific* simulator behaves as the C0 falsifier
+   assumes; @coletti2011dynamic and @dazbejarano2016new support plausibility but are abstract-only.
