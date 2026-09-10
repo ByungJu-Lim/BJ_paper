@@ -7,7 +7,12 @@ FIELD_RE = re.compile(r"^(?P<key>[\w-]+):\s*(?P<value>.*)$")
 ISSUE_RE = re.compile(r'^\s*-\s*"?(?P<issue>.*?)"?\s*$')
 
 TRACKED_SCALAR_FIELDS = ("status", "round", "last-critic-verdict", "verified-sources")
-LIST_FIELDS = ("last-critic-issues", "rejected-citations")
+LIST_FIELDS = ("last-critic-issues", "rejected-citations", "preconditions")
+# A review at one stage routinely turns up something a *later* stage must settle.
+# Prose in a notes file cannot bind it: the later session has no structural reason
+# to open that file. A precondition recorded here does bind it, because the stage
+# cannot be approved while one is still open.
+PRECONDITION_RE = re.compile(r"^(?P<state>open|resolved):\s*(?P<text>.+)$")
 # The only stage carrying citation bookkeeping beyond the common fields.
 CITATION_STAGE_ID = "citation-manage"
 REQUIRED_STAGE_IDS = (
@@ -51,6 +56,7 @@ def parse_stages(state_path: Path) -> list[dict]:
                 "verified-sources": None,
                 "last-critic-issues": [],
                 "rejected-citations": [],
+                "preconditions": [],
                 "_field-errors": [],
                 "_seen-scalar-fields": set(),
             }
@@ -156,6 +162,37 @@ def validate_stage(stage: dict) -> list[str]:
     return errors
 
 
+def open_preconditions(stage: dict) -> list[str]:
+    """The unmet preconditions on a stage, in the order they were recorded."""
+    texts = []
+    for entry in stage.get("preconditions", []):
+        match = PRECONDITION_RE.match(entry)
+        if match and match.group("state") == "open":
+            texts.append(match.group("text").strip())
+    return texts
+
+
+def validate_preconditions(stage: dict) -> list[str]:
+    """Preconditions are kept, not deleted, once met - the record of what was owed
+    is worth as much as the fact that it is now paid, so a met one is marked
+    'resolved:' rather than removed."""
+    errors: list[str] = []
+    stage_id = stage["id"]
+    for entry in stage.get("preconditions", []):
+        if not PRECONDITION_RE.match(entry):
+            errors.append(
+                f"{stage_id}: precondition must read 'open: <what is owed>' or "
+                f"'resolved: <what was owed>', got '{entry}'"
+            )
+    unmet = open_preconditions(stage)
+    if unmet and stage["status"] == "approved":
+        errors.append(
+            f"{stage_id}: cannot be approved with {len(unmet)} open precondition(s): "
+            + "; ".join(unmet)
+        )
+    return errors
+
+
 def validate_citation_bookkeeping(stage: dict) -> list[str]:
     """citation-manage tracks how many sources survived verification and what was rejected."""
     stage_id = stage["id"]
@@ -202,7 +239,7 @@ def validate_all(state_path: Path) -> dict[str, list[str]]:
         report["__workflow__"] = workflow_errors
 
     for stage in stages:
-        errors = validate_stage(stage)
+        errors = validate_stage(stage) + validate_preconditions(stage)
         if errors:
             report.setdefault(stage["id"], []).extend(errors)
 
@@ -234,6 +271,10 @@ def main() -> int:
     report = validate_all(args.state)
     if not report:
         print("paper-state.md is valid.")
+        # Printed on success as well: a precondition nobody reads binds nothing.
+        for stage in parse_stages(args.state):
+            for text in open_preconditions(stage):
+                print(f"  open precondition on {stage['id']}: {text}")
         return 0
 
     print("paper-state.md validation errors:")

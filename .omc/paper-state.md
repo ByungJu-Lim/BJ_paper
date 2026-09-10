@@ -17,18 +17,28 @@ status: not-started
 round: 0/3
 last-critic-verdict:
 last-critic-issues:
+preconditions:
+- open: tighten the Gap's trailing clause - "nothing addresses shell-and-tube fouling resistance at all" is true only on the anaphoric reading; read literally our own registry contradicts it (@he2025machine trains surrogates on CFD-simulated shell-and-tube fouling data, and ikram2023comparative compares models for shell-and-tube fouling resistance directly). Replace with "and no such comparison addresses shell-and-tube fouling resistance." [from lit-review round 3]
+- open: clear the stale round-1 paragraph in docs/notes/ml-fouling-prediction-shell-tube.md that still says the Gap cites all three original sources; the rewritten Gap cites only @gallup2023physics. [from lit-review round 3]
 
 ## Stage: outline-draft
 status: not-started
 round: 0/3
 last-critic-verdict:
 last-critic-issues:
+preconditions:
+- open: supply a comparative reason for choosing additive-residual over a loss penalty, and pin it in the Approach slot. Two attempts failed: "Ebert-Panchal is not a PDE so a loss penalty has nothing to enforce" is refuted by the ODE it writes, and "a loss penalty changes the objective rather than the capacity" is reversed - a loss penalty leaves the architecture untouched, so @gallup2023physics's loss model and baseline are the same six-layer 20-node network, matched by construction. Only the non-comparative claim survives: capacity matching is tractable FOR additive-residual. [from lit-review round 3]
+- open: state in the manuscript that a loss-penalty variant on the Ebert-Panchal ODE residual is a feasible alternative deliberately not taken. The one cited precedent found that family generalizing far better, so a referee will ask. [from lit-review round 3]
 
 ## Stage: code-experiment
 status: not-started
 round: 0/3
 last-critic-verdict:
 last-critic-issues:
+preconditions:
+- open: read and register Kennedy & O'Hagan (2001), "Bayesian Calibration of Computer Models", 10.1111/1467-9868.00294 - the origin of the y = eta(x) + delta(x) + eps form this hybrid is. Their result that the discrepancy term is weakly identifiable and that identification degrades away from the calibration region bears directly on C0 ("the residual term has real work to do") and on C2's extrapolation premise. Whether it binds under a fully simulated, known-noise design is open and must not be assumed either way. [from lit-review round 2]
+- open: record C0's Ebert-Panchal parameter provenance in the run manifest against the page or table it was verified on. The values in the topic note came from pdftotext and show mangled scientific notation. [from lit-review round 2]
+- open: add a transcription-error sanity gate: C0's falsifier is biased toward confirming C0, because mangled parameters make the residual-free correlation predict worse, which raises its extrapolation RMSE, which is the direction that leaves C0 un-refuted. If the residual-free correlation's RMSE exceeds the black-box's extrapolation RMSE, treat that as a transcription error rather than as evidence for C0. [from lit-review round 2]
 
 ## Stage: results-discussion
 status: not-started

@@ -144,6 +144,7 @@ def reset_paper_state(plan: Plan) -> None:
             "round: 0/3",
             "last-critic-verdict:",
             "last-critic-issues:",
+            "preconditions:",
             *STAGE_EXTRA_FIELDS.get(stage, ()),
             "",
         ]

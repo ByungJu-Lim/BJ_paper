@@ -2,7 +2,9 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.check_paper_state import parse_stages, validate_all, validate_stage
+from scripts.check_paper_state import (open_preconditions, parse_stages, validate_all,
+                                       validate_preconditions, validate_stage)
+from tests.state_fixture import build_state
 
 
 def write_state(tmp_dir: str, content: str) -> Path:
@@ -465,6 +467,79 @@ class TestCitationBookkeeping(unittest.TestCase):
                 stage["rejected-citations"],
                 ["ghost2021: not in retrieved-sources.json", "smith2019: retracted"],
             )
+
+
+class TestPreconditions(unittest.TestCase):
+    """A review at one stage routinely turns up something a later stage must settle.
+
+    Prose in a notes file cannot bind that stage - the later session has no
+    structural reason to open the file. These tests pin the mechanism that does.
+    """
+
+    def validate(self, tmp_dir: str, **kwargs) -> dict:
+        path = write_state(tmp_dir, build_state(**kwargs))
+        return validate_all(path)
+
+    def test_an_open_precondition_blocks_approval(self):
+        with TemporaryDirectory() as tmp:
+            report = self.validate(
+                tmp,
+                statuses={"story-brief": "approved", "lit-review": "approved",
+                          "novelty-check": "approved"},
+                preconditions={"novelty-check": ["open: settle the Gap's trailing clause"]},
+            )
+            errors = report.get("novelty-check", [])
+            self.assertTrue(any("cannot be approved with 1 open precondition" in e for e in errors),
+                            errors)
+            self.assertTrue(any("settle the Gap's trailing clause" in e for e in errors),
+                            "the error must name what is owed, or it cannot be acted on")
+
+    def test_resolving_it_unblocks_approval(self):
+        with TemporaryDirectory() as tmp:
+            report = self.validate(
+                tmp,
+                statuses={"story-brief": "approved", "lit-review": "approved",
+                          "novelty-check": "approved"},
+                preconditions={"novelty-check": ["resolved: settled the Gap's trailing clause"]},
+            )
+            self.assertEqual(report, {})
+
+    def test_a_resolved_precondition_is_kept_not_deleted(self):
+        """The record of what was owed is worth as much as the fact it was paid."""
+        with TemporaryDirectory() as tmp:
+            path = write_state(tmp, build_state(
+                preconditions={"code-experiment": ["resolved: registered Kennedy and O'Hagan"]}))
+            stage = {s["id"]: s for s in parse_stages(path)}["code-experiment"]
+            self.assertEqual(stage["preconditions"], ["resolved: registered Kennedy and O'Hagan"])
+            self.assertEqual(open_preconditions(stage), [])
+
+    def test_open_preconditions_do_not_block_earlier_statuses(self):
+        """They gate approval, not work: the stage still has to be worked on."""
+        with TemporaryDirectory() as tmp:
+            report = self.validate(
+                tmp,
+                statuses={"story-brief": "approved", "lit-review": "approved",
+                          "novelty-check": "in-progress"},
+                preconditions={"novelty-check": ["open: settle the Gap's trailing clause"]},
+            )
+            self.assertEqual(report, {})
+
+    def test_a_malformed_precondition_is_rejected(self):
+        with TemporaryDirectory() as tmp:
+            report = self.validate(
+                tmp, preconditions={"code-experiment": ["settle this eventually"]})
+            errors = report.get("code-experiment", [])
+            self.assertTrue(any("must read 'open:" in e for e in errors), errors)
+
+    def test_several_open_preconditions_are_all_named(self):
+        stage = {"id": "code-experiment", "status": "approved",
+                 "preconditions": ["open: first", "resolved: second", "open: third"]}
+        errors = validate_preconditions(stage)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("2 open precondition", errors[0])
+        self.assertIn("first", errors[0])
+        self.assertIn("third", errors[0])
+        self.assertNotIn("second", errors[0])
 
 
 if __name__ == "__main__":

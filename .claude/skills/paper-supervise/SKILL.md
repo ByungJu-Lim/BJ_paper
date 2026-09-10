@@ -30,8 +30,21 @@ Stages 1-8 produce the manuscript; stage 9 repeats for as long as the paper is i
 3. Before completing `lit-review` or starting `citation-manage`, run `python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online`. This resolves each DOI (Crossref, falling back to DataCite for arXiv and Zenodo), matches titles, and screens against Crossref's Retraction Watch feed. Stop and quarantine any source that fails — a retracted source is a hard stop, not a warning. A source reported as `awaiting-user-file` is a request to relay: give the user the key, title, DOI, and the exact `docs/sources/` path, and wait for the file rather than proceeding on the abstract.
 4. Once `code-experiment` is `approved`, run `python scripts/rerun_manifest.py --all` before any stage that consumes its output. `--check-manifests` proves the manifest is well formed; only the re-run proves the result reproduces, and `results-discussion`, `figures-tables` and the submission preflight all rest on that. A run that no longer reproduces reopens `code-experiment` — it does not become a caveat in Discussion.
 5. Once `polish-review` is `approved`, also run `python scripts/check_submissions.py --log submissions/submission-log.md` and report the open attempt's venue and status. If an attempt is `submitted` or `under-review`, the paper is with a venue and the only valid work is answering a decision — do not open a new attempt.
-6. Read `.omc/paper-state.md` and find the first eligible stage whose prerequisites are approved and whose `status` is not `approved`. This means `code-experiment` is selected before `results-discussion` or `figures-tables`; `results-discussion` and `figures-tables` may proceed in either order after `code-experiment` is approved; `citation-manage` waits for both; and `polish-review` waits for `citation-manage`. If the first non-approved eligible stage is `awaiting-user` or `escalated`, surface it and stop instead of generating more work.
-7. Report that stage and its current `status`/`round` to the user, then proceed per the loop below. For `awaiting-review`, review the already generated artifact without generating it again or incrementing the round. When every manuscript stage is approved, route to `submission-manage` using its own ledger; it is not an extra stage block in `paper-state.md`.
+6. Read the `preconditions:` block of the stage you are about to enter. Each entry
+   reads `open: <what is owed>` or `resolved: <what was owed>`, and a stage cannot be
+   `approved` while one is still open — `check_paper_state.py` prints the open ones on
+   every run and refuses the approval. Surface them to the user before starting work on
+   that stage, not after. Resolve one by rewriting `open:` to `resolved:`; never delete
+   the line, because the record of what was owed is worth as much as the fact it is paid.
+
+   Write one whenever a review turns up something a **later** stage must settle. Prose in
+   a notes file does not bind that stage: the later session has no structural reason to
+   open the file, so the note is true and unread. Record it against the stage that owes
+   it, name what would discharge it, and say which stage and round it came from —
+   `- open: register Kennedy & O'Hagan 10.1111/1467-9868.00294 ... [from lit-review round 2]`.
+
+7. Read `.omc/paper-state.md` and find the first eligible stage whose prerequisites are approved and whose `status` is not `approved`. This means `code-experiment` is selected before `results-discussion` or `figures-tables`; `results-discussion` and `figures-tables` may proceed in either order after `code-experiment` is approved; `citation-manage` waits for both; and `polish-review` waits for `citation-manage`. If the first non-approved eligible stage is `awaiting-user` or `escalated`, surface it and stop instead of generating more work.
+8. Report that stage and its current `status`/`round` to the user, then proceed per the loop below. For `awaiting-review`, review the already generated artifact without generating it again or incrementing the round. When every manuscript stage is approved, route to `submission-manage` using its own ledger; it is not an extra stage block in `paper-state.md`.
 
 ## Generate-then-review loop (per stage)
 

@@ -31,11 +31,15 @@ _ROUND_AND_VERDICT = {
 }
 
 
-def build_state(statuses: dict[str, str] | None = None, verified_sources: int | None = None) -> str:
+def build_state(statuses: dict[str, str] | None = None, verified_sources: int | None = None,
+                preconditions: dict[str, list[str]] | None = None) -> str:
     """Render a full state file, defaulting every unnamed stage to not-started.
 
     `verified_sources` defaults to 1 when citation-manage is approved, because
     an approved citation stage that verified nothing is rejected as an accident.
+
+    `preconditions` maps a stage id to entries already spelled "open: ..." or
+    "resolved: ...", so a fixture can exercise the malformed case too.
     """
     statuses = dict(statuses or {})
     unknown = sorted(set(statuses) - set(REQUIRED_STAGE_IDS))
@@ -57,6 +61,10 @@ def build_state(statuses: dict[str, str] | None = None, verified_sources: int | 
         blocks.append(f"round: {round_value}")
         blocks.append(f"last-critic-verdict: {verdict}")
         blocks.append("last-critic-issues:")
+        stage_preconditions = (preconditions or {}).get(stage_id, [])
+        if stage_preconditions:
+            blocks.append("preconditions:")
+            blocks.extend(f"- {entry}" for entry in stage_preconditions)
         if stage_id == CITATION_STAGE_ID:
             blocks.append(f"verified-sources: {verified_sources}")
             blocks.append("rejected-citations:")
@@ -92,6 +100,7 @@ def with_stage(stage_id: str, status: str) -> dict[str, str]:
 
 
 def write_state(path: Path, statuses: dict[str, str] | None = None,
-                verified_sources: int | None = None) -> Path:
-    path.write_text(build_state(statuses, verified_sources), encoding="utf-8")
+                verified_sources: int | None = None,
+                preconditions: dict[str, list[str]] | None = None) -> Path:
+    path.write_text(build_state(statuses, verified_sources, preconditions), encoding="utf-8")
     return path
