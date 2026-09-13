@@ -37,6 +37,13 @@
     "positive_range": 7.432410827270543,
     "sigma": 0.14864821654541086
   },
+  "ebert_panchal_coverage": {
+    "central_box_n": 729,
+    "central_box_positive_fraction": 0.0,
+    "extrapolation_n": 1296,
+    "extrapolation_positive_fraction": 0.10339506172839506,
+    "whole_grid_positive_fraction": 0.06617283950617284
+  },
   "medians": {
     "bb_extra_rmse": 0.6537305138145227,
     "bb_interp_rmse": 0.22388400647090206,

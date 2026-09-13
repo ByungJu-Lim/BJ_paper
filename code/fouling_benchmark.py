@@ -280,6 +280,16 @@ def run(cfg: dict) -> dict:
     tb_norm = normalize(Tb)
     X = np.column_stack([re_norm, tb_norm])
 
+    extra_mask = union_rule_mask(re_norm, tb_norm)
+    central_mask = ~extra_mask
+    ep_coverage = {
+        "central_box_positive_fraction": float(np.mean(Rf_ep[central_mask] > 0.0)),
+        "extrapolation_positive_fraction": float(np.mean(Rf_ep[extra_mask] > 0.0)),
+        "whole_grid_positive_fraction": float(np.mean(Rf_ep > 0.0)),
+        "central_box_n": int(central_mask.sum()),
+        "extrapolation_n": int(extra_mask.sum()),
+    }
+
     trial_grid = list(itertools.product(
         cfg["models"]["hidden_layer_sizes_grid"],
         cfg["models"]["learning_rate_init_grid"],
@@ -393,6 +403,7 @@ def run(cfg: dict) -> dict:
             "positive_range": latent["positive_range"],
             "sigma": sigma,
         },
+        "ebert_panchal_coverage": ep_coverage,
         "capacity": {
             "hidden_layer_sizes_grid": cfg["models"]["hidden_layer_sizes_grid"],
             "param_counts": {str(k): v for k, v in param_counts.items()},
