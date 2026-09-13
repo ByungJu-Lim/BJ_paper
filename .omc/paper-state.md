@@ -22,7 +22,7 @@ preconditions:
 - resolved: clear the stale round-1 paragraph in docs/notes/ml-fouling-prediction-shell-tube.md that still says the Gap cites all three original sources; the rewritten Gap cites only @gallup2023physics. [from lit-review round 3]
 
 ## Stage: outline-draft
-status: awaiting-user
+status: approved
 round: 1/3
 last-critic-verdict: pass
 last-critic-issues: Stage-level package review round 1 verdict pass. All four artifacts cohere: Introduction/Related Work/Methods claim declarations match story-brief's section-coverage mapping, numeric thresholds and Gallup figures are stated identically across sections, Results/Discussion/Conclusion remain scaffolds, and code-experiment's three open preconditions (Kennedy & O'Hagan registration, parameter provenance, transcription gate) are correctly left open rather than resolved prematurely. Pending final user approval of the outline-draft stage before code-experiment begins.
