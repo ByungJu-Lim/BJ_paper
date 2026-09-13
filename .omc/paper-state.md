@@ -70,7 +70,7 @@ verified-sources: 12
 rejected-citations:
 
 ## Stage: polish-review
-status: awaiting-user
+status: approved
 round: 1/3
 last-critic-verdict: pass
 last-critic-issues: Delegated full-draft critic reviewed all 7 sections against the 5-axis rubric plus final-pass checks (story-brief argument continuity, terminology consistency, tense/voice, no-assumed-claim-as-fact, gallup2023physics characterization vs novelty-matrix.md). Found one real defect: Kennedy & O'Hagan (2001) was discussed by name as a load-bearing Limitations point in 05-discussion.md and mentioned in 03-methods.md's provenance section, but had no @key citation in the prose and no entry in refs/references.bib, even though it is registered in docs/notes/retrieved-sources.json. Fixed: added @kennedy2001bayesian citations at both mentions and a kennedy2001bayesian BibTeX entry; verify_citations.py and verify_story_brief.py --require-slots all --require-coverage --check-manifests both re-pass. All other checks held: argument continuity between story-brief's six slots and the section openings; C0-C3 terminology and extrapolation/interpolation-region vocabulary consistent across sections; Methods' future/preregistration tense vs Results/Discussion/Conclusion's past/report tense is an intentional, clean split with no leakage; no assumed claim (C0, C2, C3) is stated as settled fact anywhere, including Introduction/Related Work/Methods; the gallup2023physics comparison in Discussion matches novelty-matrix.md's characterization. Pending final user sign-off before submission-manage.

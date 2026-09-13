@@ -1,0 +1,12 @@
+{
+  "venue": "Journal of Pipeline Verification Studies (FIXTURE)",
+  "format": "png",
+  "dpi": 300,
+  "column_width_mm": { "single": 90, "double": 190 },
+  "color_mode": "rgb",
+  "font_family": "Arial",
+  "min_font_pt": 7,
+  "main_figures": ["fig1", "fig2"],
+  "supplementary_figures": [],
+  "notes": "FIXTURE venue for exercising submission-manage per CLAUDE.md; never submitted anywhere."
+}
