@@ -71,7 +71,7 @@ identified as unresolved in the literature.
   produce a different outcome. This run does not distinguish "additive
   residuals do not help here" from "this specific correlation was
   uninformative over this specific envelope."
-- **Kennedy & O'Hagan's (2001) identifiability caveat is set aside by
+- **@kennedy2001bayesian's (2001) identifiability caveat is set aside by
   construction, not resolved.** In a fully simulated design with a known
   noise model, the discrepancy the hybrid must learn is computable directly
   from the recorded config, side-stepping the field-data identifiability
