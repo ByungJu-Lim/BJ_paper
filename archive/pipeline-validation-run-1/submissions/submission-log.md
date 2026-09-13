@@ -18,3 +18,14 @@
 > carried-forward:
 > no-feedback-reason:
 > reviewer-points:
+
+## Attempt: 01-jpvs
+venue: Journal of Pipeline Verification Studies (FIXTURE — not a real journal, used only to exercise this skill per CLAUDE.md)
+venue-url: FIXTURE — no real URL
+status: preparing
+submitted-on:
+decision-on:
+manuscript-tag:
+carried-forward:
+no-feedback-reason:
+reviewer-points:
