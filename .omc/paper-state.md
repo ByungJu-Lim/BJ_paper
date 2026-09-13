@@ -62,11 +62,11 @@ preconditions:
 - resolved: made Fig. 2 read its plotted values from the persisted ebert_panchal_coverage field rather than hard-coded literals, and made its in-chart title descriptive rather than interpretive. [from results-discussion/figures-tables round 1 critic]
 
 ## Stage: citation-manage
-status: not-started
-round: 0/3
-last-critic-verdict:
-last-critic-issues:
-verified-sources: 0
+status: awaiting-user
+round: 1/3
+last-critic-verdict: pass
+last-critic-issues: Verifier subagent confirmed: verify_source_registry.py --online and verify_citations.py both pass with no --state flag (full completeness required and met). 12 BibTeX entries added for the 12 distinct citation keys used across docs/sections/*.md; manually cross-checked all 12 against docs/notes/retrieved-sources.json for exact title, full ordered author list, year, and DOI - all match, no fabricated fields (no invented pages/volumes/issues). jadhav2022physics correctly typed @inproceedings/booktitle per its conference-paper registry entry. The 2 registered-but-uncited sources (mcbride2020hybrid, kennedy2001bayesian) are correctly excluded from the bibliography. Pending user approval before this stage is final.
+verified-sources: 12
 rejected-citations:
 
 ## Stage: polish-review
