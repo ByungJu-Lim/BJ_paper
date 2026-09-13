@@ -219,5 +219,20 @@
     "venue": "AIChE Journal",
     "doi": "10.1002/aic.15036",
     "access": "abstract-only"
+  },
+  {
+    "key": "kennedy2001bayesian",
+    "title": "Bayesian Calibration of Computer Models",
+    "url": "https://doi.org/10.1111/1467-9868.00294",
+    "retrieved_at": "2026-09-13",
+    "source_type": "journal-article",
+    "authors": [
+      "Marc C. Kennedy",
+      "Anthony O'Hagan"
+    ],
+    "year": 2001,
+    "venue": "Journal of the Royal Statistical Society Series B: Statistical Methodology",
+    "doi": "10.1111/1467-9868.00294",
+    "access": "abstract-only"
   }
 ]

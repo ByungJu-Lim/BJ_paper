@@ -1,0 +1,98 @@
+{
+  "grid": {
+    "n_re": 45,
+    "n_tb": 45,
+    "re_min": 6800.0,
+    "re_max": 29500.0,
+    "tb_min": 420.0,
+    "tb_max": 500.0,
+    "_note": "Re bounds (6800-29500) match the velocity range (1.2-5.2 m/s) Ebert & Panchal's Fig. 2 data was actually regressed over, given this benchmark's D_h/rho/mu; Re bounds also lie within Blasius/Darcy smooth-pipe turbulent validity (about 4e3-1e5). Tb (bulk, kelvin) and T_w below are chosen so film temperature T_f=(Tb+T_w)/2 falls inside Ebert-Panchal's documented fit window: Fig. 2 of @wilson2017twenty plots the correlation over a film-temperature range of 200-500 degC (473-773 K)."
+  },
+  "physical": {
+    "D_h": 0.02,
+    "rho": 850.0,
+    "mu": 0.003,
+    "T_w": 550.0,
+    "_units": "D_h m; rho kg/m^3; mu Pa s; T_w K. T_w > T_b,max (500 K) as required; T_f then ranges 485-525 K, inside the correlation's 473-773 K fitted window."
+  },
+  "friction": {
+    "f_D_coeff": 0.3164,
+    "f_D_exp": -0.25,
+    "_note": "Smooth-tube turbulent Darcy friction factor f_D = 0.3164 Re^-0.25 (Blasius)."
+  },
+  "simulator": {
+    "H_days": 30.0,
+    "euler_steps": 3000,
+    "A_ind": 0.5,
+    "E_ind": 40000.0,
+    "z_c": 0.3,
+    "A_dep": 0.0005,
+    "E_dep": 55000.0,
+    "p": 1.0,
+    "A_rem": 0.05,
+    "q": 1.0,
+    "T_ref": 340.0,
+    "Re_ref": 20000.0,
+    "tau_ref": 50.0,
+    "R_g": 8.314,
+    "induction_coverage_min_fraction": 0.3,
+    "_units": "A_ind, A_rem in d^-1; E_ind, E_dep in J/mol; A_dep in native-resistance-units/day; z_c, p, q dimensionless; T_ref K; Re_ref dimensionless; tau_ref Pa; R_g J/(mol K).",
+    "_provenance": "Selected only to satisfy the preregistered induction-coverage fraction and the positive-range gate below, independently of Ebert-Panchal coefficients and of either model's outcome. Frozen before any model training."
+  },
+  "ebert_panchal": {
+    "variant": "Ebert and Panchal (1997), Equation (1), as documented by Wilson, Ishiyama & Polley (2017)",
+    "source_key": "wilson2017twenty",
+    "doi": "10.1080/01457632.2016.1206407",
+    "open_access_copy": "https://heatexchanger-fouling.com/wp-content/uploads/2021/09/01_Wilson_Twenty-years-of-Ebert-and-Panchal_F.pdf",
+    "equation": "Fig. 2 caption (loci fitted to Ebert and Panchal 1997 / Scarborough et al. 1979 data): dRf/dt = a1 Re^b1 exp(-Ea/(R Tf)) - c1 tau_w",
+    "coefficients": {
+      "a1": 30200000.0,
+      "a1_units": "K m^2 / (kW h)",
+      "b1": -0.88,
+      "b1_units": "dimensionless",
+      "c1": 0.000145,
+      "c1_units": "m^2 K m^2 / (kW Pa h)",
+      "Ea": 68000.0,
+      "Ea_units": "J/mol"
+    },
+    "transcription_check": {
+      "method": "visual reading of two independently rendered page images (300 dpi and 600 dpi PyMuPDF renders of the open-access conference PDF), not pdftotext",
+      "checks_performed": 2,
+      "values_agreed": true,
+      "verified_against": "Fig. 2 caption text, page 2 of the Enfield 2015 conference PDF (printed page 844 of the original proceedings volume): 'Loci plotted for parameters a1 = 30.2x10^6 K m2/kW h; b1 = -0.88, c1 = 1.45x10^-4 m2 K m2/kW Pa h and Ea = 68 kJ/mol.'"
+    },
+    "H_hours": 720.0,
+    "_note": "a1's unit denominator carries an implicit per-hour rate, so the fixed physics baseline integrates over H_hours = 30 d * 24 h/d = 720 h, not H_days, to stay in the units the source's own coefficients were regressed in."
+  },
+  "noise": {
+    "sigma_fraction": 0.02
+  },
+  "splits": {
+    "central_fraction": 0.6,
+    "interp_test_fraction": 0.2,
+    "val_fraction_of_remainder": 0.2
+  },
+  "repetitions": {
+    "count": 10,
+    "seed_list": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  },
+  "models": {
+    "hidden_layer_sizes_grid": [[8], [8, 8], [16]],
+    "learning_rate_init_grid": [0.01, 0.03, 0.1],
+    "alpha_grid": [0.0001, 0.001],
+    "max_iter": 4000,
+    "_note": "Both arms use MLPRegressor with the identical 2-input architecture (Re, Tb normalized) at every trial; the black-box output is Rf directly and the hybrid output is the learned discrepancy, so trainable-parameter counts are equal by construction (ratio 0%), not merely matched within 10%. Every trial applies the same hidden_layer_sizes/learning_rate_init/alpha combination to both arms."
+  },
+  "decision_thresholds": {
+    "c0_refute_sigma_multiple": 1.1,
+    "c1_ratio_min": 1.5,
+    "c2_rmse_improvement_min": 0.10,
+    "c2_win_rate_min": 0.8,
+    "c2_p_max": 0.05,
+    "c3_rmse_degradation_max": 0.10
+  },
+  "random_seed_policy": {
+    "master_seed": 20260913,
+    "_note": "Per-repetition seeds are derived deterministically from master_seed and the repetition index; both arms in a repetition share the same split/noise/init seed stream, differing only in which target they are fit to."
+  }
+}

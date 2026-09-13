@@ -1,0 +1,49 @@
+{
+  "run_id": "fouling-benchmark-2026-09-13",
+  "script": "code/fouling_benchmark.py",
+  "command": "C:/Python313/python.exe code/fouling_benchmark.py --config data/raw/fouling-benchmark-config.json --out data/processed/fouling-benchmark-2026-09-13.json",
+  "inputs": [
+    "data/raw/fouling-benchmark-config.json"
+  ],
+  "outputs": [
+    "data/processed/fouling-benchmark-2026-09-13.json"
+  ],
+  "random_seed": 20260913,
+  "python_version": "3.13.7",
+  "dependencies": {
+    "numpy": "2.4.2",
+    "scikit-learn": "1.8.0"
+  },
+  "target_basis": "noisy",
+  "ebert_panchal_provenance": {
+    "source_key": "wilson2017twenty",
+    "doi": "10.1080/01457632.2016.1206407",
+    "equation": "Equation (1) as reproduced in Fig. 2 caption",
+    "page": "printed page 844 of the 2015 Enfield conference proceedings (page 2 of the open-access PDF)",
+    "table_or_figure": "Fig. 2 caption",
+    "open_access_copy_used": "https://heatexchanger-fouling.com/wp-content/uploads/2021/09/01_Wilson_Twenty-years-of-Ebert-and-Panchal_F.pdf",
+    "coefficients": {
+      "a1": "30.2e6 K m^2/(kW h)",
+      "b1": "-0.88",
+      "c1": "1.45e-4 m^2 K m^2/(kW Pa h)",
+      "Ea": "68 kJ/mol"
+    },
+    "verification_method": "Two independent visual readings of PyMuPDF page renders of the open-access PDF (300 dpi and 600 dpi), transcribed by vision_analyze against the printed caption; not pdftotext. Both readings agreed with each other and with the earlier pdftotext extraction.",
+    "verification_count": 2,
+    "values_agreed": true
+  },
+  "kennedy_ohagan_note": "Kennedy & O'Hagan (2001), 10.1111/1467-9868.00294, registered in docs/notes/retrieved-sources.json (abstract-only; full text is paywalled). Their finding that a y=eta(x)+delta(x)+eps discrepancy term is weakly identifiable and degrades away from the calibration region is a caveat on C0 and C2's extrapolation premise. In this fully simulated, known-noise-model design, both the latent simulator and the additive-residual hybrid's discrepancy term are directly observable/computable from the recorded manifest and config, so the discrepancy is identified by construction rather than estimated from field data under model-form uncertainty; the caveat therefore does not bind this benchmark's internal validity, though it remains a limitation for any claim that this result transfers to a real, non-simulated fouling identification problem. This limitation must be stated in Discussion.",
+  "transcription_gate_result": {
+    "gate": "if residual-free (Ebert-Panchal-only) median noisy-target extrapolation RMSE exceeds the black-box median extrapolation RMSE, treat as a transcription/unit/input-mapping alarm rather than evidence for C0",
+    "ep_median_extrapolation_rmse": 5.276012001312173,
+    "black_box_median_extrapolation_rmse": 0.6537305138145227,
+    "gate_fired": true,
+    "consequence": "C0 adjudication is suspended per the preregistered precedence rule; C0 remains 'assumed'. The operating grid's Reynolds-number bounds (6800-29500) were set to match the 1.2-5.2 m/s velocity range Ebert & Panchal's own Fig. 2 data was regressed over (for this benchmark's D_h/rho/mu), so this is not a range mismatch: the residual-free correlation still predicts a positive net rate at only 6.6% of grid points because its suppression term (~tau_w, which scales roughly as Re^2 for turbulent flow) grows faster with Re than its deposition term (~Re^-0.88) shrinks, which is exactly the threshold-fouling behaviour the model was designed to express (Ebert & Panchal named it a 'threshold' model because most operating conditions fall below the fouling threshold). The coefficient transcription was independently visually verified twice against the source Fig. 2 caption and both readings agree, and a hand recomputation at the source's own benchmark point (Re=17100, Tf=503K, tau_w=7.2 Pa, from Wilson et al.'s own Fig. 4) gives a small positive net rate consistent with the source paper's Fig. 4, so the correlation code is not misapplied. The gate is therefore reporting a genuine finding: this published threshold correlation, taken at face value over a realistic turbulent operating envelope matching its own fitted velocity range, predicts near-zero fouling almost everywhere, while the latent simulator (which deliberately omits the same suppression saturation and instead adds an induction mechanism) accumulates continuously. This mismatch is reported as-is per the preregistered precedence rule rather than re-tuned to force a different C0 outcome, and must be discussed in Discussion/Limitations as a property of comparing a threshold correlation against a simulator that does not share its suppression regime, not as a defect in either component."
+  },
+  "sensitivity_check": {
+    "purpose": "Diagnostic only, not adjudicative: confirms the transcription gate's outcome is not an artifact of an unrepresentative Reynolds range.",
+    "re_range_tested": "4000-60000 (original, wider than the source's own 1.2-5.2 m/s fitted velocity window)",
+    "result": "positive-net-rate fraction rose only from 6.6% to 8.2%, and the gate still fired (EP median extrapolation RMSE 4.72 vs black-box 1.55) at the wider range, so the finding is not sensitive to this choice of Reynolds bounds."
+  },
+  "nondeterminism": null
+}
