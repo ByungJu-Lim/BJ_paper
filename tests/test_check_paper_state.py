@@ -3,7 +3,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from scripts.check_paper_state import (open_preconditions, parse_stages, validate_all,
-                                       validate_preconditions, validate_stage)
+                                       validate_outline_artifacts, validate_preconditions,
+                                       validate_stage)
 from tests.state_fixture import build_state
 
 
@@ -20,6 +21,22 @@ def stage_block(
     verdict: str = "",
     extra: str = "",
 ) -> str:
+    artifact_ledger = ""
+    if stage_id == "outline-draft" and "artifacts:" not in extra:
+        if status == "not-started":
+            artifact_statuses = ("not-started",) * 4
+        elif status == "in-progress":
+            artifact_statuses = ("in-progress", "not-started", "not-started", "not-started")
+        else:
+            artifact_statuses = ("approved",) * 4
+        artifact_ledger = "artifacts:\n" + "".join(
+            f"- {artifact_id}: {artifact_status}, "
+            f"round {'0/3' if artifact_status == 'not-started' else '1/3'}, "
+            f"verdict {'none' if artifact_status in {'not-started', 'in-progress'} else 'pass'}\n"
+            for artifact_id, artifact_status in zip(
+                ("outline", "introduction", "related-work", "methods"), artifact_statuses
+            )
+        )
     return (
         f"## Stage: {stage_id}\n"
         f"status: {status}\n"
@@ -27,6 +44,7 @@ def stage_block(
         f"last-critic-verdict: {verdict}\n"
         "last-critic-issues:\n"
         f"{extra}"
+        f"{artifact_ledger}"
     )
 
 
@@ -265,7 +283,11 @@ class TestValidateAll(unittest.TestCase):
                 "round: 0/3\n"
                 "last-critic-verdict:\n"
                 "last-critic-issues:\n\n"
-                "## Stage: outline-draft\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
+                "## Stage: outline-draft\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n"
+                "artifacts:\n- outline: not-started, round 0/3, verdict none\n"
+                "- introduction: not-started, round 0/3, verdict none\n"
+                "- related-work: not-started, round 0/3, verdict none\n"
+                "- methods: not-started, round 0/3, verdict none\n\n"
                 "## Stage: code-experiment\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: results-discussion\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: figures-tables\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
@@ -411,6 +433,64 @@ class TestValidateAll(unittest.TestCase):
             self.assertTrue(
                 any("duplicate scalar field 'status'" in error for error in validate_all(state_path)["story-brief"])
             )
+
+
+class TestOutlineArtifacts(unittest.TestCase):
+    def stage(self, status="in-progress", artifacts=None) -> dict:
+        return {
+            "id": "outline-draft",
+            "status": status,
+            "artifacts": artifacts or [],
+        }
+
+    def test_parses_artifact_ledger(self):
+        with TemporaryDirectory() as tmp:
+            path = write_state(
+                tmp,
+                "## Stage: outline-draft\n"
+                "status: in-progress\nround: 0/3\nlast-critic-verdict:\n"
+                "last-critic-issues:\nartifacts:\n"
+                "- outline: approved, round 3/3, verdict pass\n"
+                "- introduction: awaiting-user, round 2/3, verdict pass\n"
+                "- related-work: not-started, round 0/3, verdict none\n"
+                "- methods: not-started, round 0/3, verdict none\n",
+            )
+            stage = parse_stages(path)[0]
+            self.assertEqual(len(stage["artifacts"]), 4)
+            self.assertTrue(stage["artifacts"][1].startswith("introduction:"))
+
+    def test_requires_complete_artifact_ledger(self):
+        errors = validate_outline_artifacts(self.stage(artifacts=[]))
+        self.assertTrue(any("requires artifacts" in error for error in errors), errors)
+
+    def test_approved_stage_requires_every_artifact_approved(self):
+        artifacts = [
+            "outline: approved, round 1/3, verdict pass",
+            "introduction: approved, round 1/3, verdict pass",
+            "related-work: awaiting-user, round 1/3, verdict pass",
+            "methods: approved, round 1/3, verdict pass",
+        ]
+        errors = validate_outline_artifacts(self.stage(status="approved", artifacts=artifacts))
+        self.assertTrue(any("cannot be approved" in error for error in errors), errors)
+
+    def test_artifact_at_third_revise_must_escalate(self):
+        artifacts = [
+            "outline: approved, round 1/3, verdict pass",
+            "introduction: approved, round 1/3, verdict pass",
+            "related-work: in-progress, round 3/3, verdict revise",
+            "methods: not-started, round 0/3, verdict none",
+        ]
+        errors = validate_outline_artifacts(self.stage(artifacts=artifacts))
+        self.assertTrue(any("related-work" in error and "escalated" in error for error in errors), errors)
+
+    def test_valid_artifact_ledger_passes(self):
+        artifacts = [
+            "outline: approved, round 3/3, verdict pass",
+            "introduction: approved, round 2/3, verdict pass",
+            "related-work: awaiting-review, round 1/3, verdict none",
+            "methods: not-started, round 0/3, verdict none",
+        ]
+        self.assertEqual(validate_outline_artifacts(self.stage(artifacts=artifacts)), [])
 
 
 class TestCitationBookkeeping(unittest.TestCase):

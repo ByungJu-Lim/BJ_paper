@@ -48,6 +48,14 @@ Stages 1-8 produce the manuscript; stage 9 repeats for as long as the paper is i
 
 ## Generate-then-review loop (per stage)
 
+`outline-draft` is the one composite stage. Its `outline`, `introduction`,
+`related-work`, and `methods` artifacts use the nested ledger defined by that
+skill; each artifact has its own maximum-three loop and user gate. Keep the
+stage-level `round` at `0/3` while those artifacts are being produced. After all
+four are `approved`, use the ordinary stage loop below for the final package
+review. Never spend the same stage-level counter on both the outline review and
+later section reviews, and never hide nested progress in `last-critic-issues`.
+
 1. If the stage is `not-started`, set it to `in-progress`. If the round is already `3/3` and a new attempt is needed, set `escalated` and stop. Otherwise increment `round` exactly once before generation, including attempts triggered by user rejection. Clear the old verdict. After generation set `awaiting-review`; a resumed review uses that artifact and round.
 2. Delegate generation to `writer` (with `analyst` for framing), `scientist` for literature/analysis, `executor` for code/figures, or `verifier` for citations. `outline-draft` writes only the outline and Introduction/Related Work/Methods before experiments. Results, Discussion and Conclusion remain scaffold until `results-discussion` has approved experiment outputs.
 3. Delegate review to `critic` (or `verifier` for `citation-manage`) using this rubric — record the verdict and any issues back into the stage's `last-critic-verdict` / `last-critic-issues` fields:

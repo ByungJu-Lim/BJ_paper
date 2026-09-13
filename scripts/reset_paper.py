@@ -45,6 +45,13 @@ STAGES = (
 # check_paper_state.py requires these on citation-manage and rejects them anywhere
 # else, so they cannot simply be written onto every stage.
 STAGE_EXTRA_FIELDS = {
+    "outline-draft": (
+        "artifacts:",
+        "- outline: not-started, round 0/3, verdict none",
+        "- introduction: not-started, round 0/3, verdict none",
+        "- related-work: not-started, round 0/3, verdict none",
+        "- methods: not-started, round 0/3, verdict none",
+    ),
     "citation-manage": ("verified-sources: 0", "rejected-citations:"),
 }
 

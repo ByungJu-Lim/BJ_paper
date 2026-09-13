@@ -11,7 +11,7 @@
 
 ## Relation to the paper's Gap
 
-The registered evidence now covers both sides the Gap needs to distinguish: the purely-data-driven side (@he2025machine, @hosseini2022novel — no physics, no reported extrapolation split) and one genuine physics-informed side (@jadhav2022physics — physics via loss penalty, different target and geometry, no extrapolation split). None of the three is an additive-residual hybrid predicting fouling resistance directly with an explicit interpolation-vs-extrapolation comparison on shell-and-tube exchangers, so the Gap (revised in `docs/notes/story-brief.md`) now cites all three rather than asserting an unqualified negative.
+The registered evidence now covers both sides the Gap needs to distinguish: the purely-data-driven side (@he2025machine, @hosseini2022novel — no physics, no reported extrapolation split) and one genuine physics-informed side (@jadhav2022physics — physics via loss penalty, different target and geometry, no extrapolation split). None of the three is an additive-residual hybrid predicting fouling resistance directly with an explicit interpolation-vs-extrapolation comparison on shell-and-tube exchangers. The Gap in `docs/notes/story-brief.md` cites only @gallup2023physics as the directly relevant precedent; @he2025machine and @ikram2023comparative (read but dropped for corrupt Crossref metadata) show that shell-and-tube fouling resistance *is* studied by ML surrogates, just not in a matched-capacity extrapolation comparison of the kind this paper runs.
 
 ## Open risk — not yet resolved
 

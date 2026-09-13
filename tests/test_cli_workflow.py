@@ -57,6 +57,14 @@ class TestCitationWorkflow(unittest.TestCase):
                 elif stage == 'polish-review':
                     status, number, verdict = 'not-started', 0, ''
                 blocks.append(f'## Stage: {stage}\nstatus: {status}\nround: {number}/3\nlast-critic-verdict: {verdict}\nlast-critic-issues:\n')
+                if stage == 'outline-draft':
+                    blocks.append(
+                        'artifacts:\n'
+                        '- outline: approved, round 1/3, verdict pass\n'
+                        '- introduction: approved, round 1/3, verdict pass\n'
+                        '- related-work: approved, round 1/3, verdict pass\n'
+                        '- methods: approved, round 1/3, verdict pass\n'
+                    )
                 if stage == 'citation-manage':
                     blocks.append('verified-sources: 0\nrejected-citations:\n')
             state = directory / 'state.txt'

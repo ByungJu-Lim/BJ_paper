@@ -7,7 +7,16 @@ FIELD_RE = re.compile(r"^(?P<key>[\w-]+):\s*(?P<value>.*)$")
 ISSUE_RE = re.compile(r'^\s*-\s*"?(?P<issue>.*?)"?\s*$')
 
 TRACKED_SCALAR_FIELDS = ("status", "round", "last-critic-verdict", "verified-sources")
-LIST_FIELDS = ("last-critic-issues", "rejected-citations", "preconditions")
+LIST_FIELDS = ("last-critic-issues", "rejected-citations", "preconditions", "artifacts")
+# `outline-draft` contains four independently reviewed/user-approved artifacts.
+# Their review loops need their own counters; reusing the stage-level `round`
+# silently turns Introduction review 1 into outline review 4.
+OUTLINE_ARTIFACT_IDS = ("outline", "introduction", "related-work", "methods")
+ARTIFACT_RE = re.compile(
+    r"^(?P<id>[a-z][a-z-]*):\s*"
+    r"(?P<status>[a-z-]+),\s*round\s+(?P<round>\d+/\d+),\s*"
+    r"verdict\s+(?P<verdict>pass|revise|none)$"
+)
 # A review at one stage routinely turns up something a *later* stage must settle.
 # Prose in a notes file cannot bind it: the later session has no structural reason
 # to open that file. A precondition recorded here does bind it, because the stage
@@ -57,6 +66,7 @@ def parse_stages(state_path: Path) -> list[dict]:
                 "last-critic-issues": [],
                 "rejected-citations": [],
                 "preconditions": [],
+                "artifacts": [],
                 "_field-errors": [],
                 "_seen-scalar-fields": set(),
             }
@@ -162,6 +172,102 @@ def validate_stage(stage: dict) -> list[str]:
     return errors
 
 
+def validate_outline_artifacts(stage: dict) -> list[str]:
+    """Validate the nested review ledger used by `outline-draft`.
+
+    The stage-level round belongs to the final package review. The outline and
+    three pre-experiment sections each have a separate maximum-three review loop
+    and explicit user gate recorded here.
+    """
+    entries = stage.get("artifacts", [])
+    if stage.get("id") != "outline-draft":
+        return [f"{stage.get('id')}: artifacts belongs to outline-draft only"] if entries else []
+    if not entries:
+        return ["outline-draft: requires artifacts ledger for outline, introduction, related-work, methods"]
+
+    errors: list[str] = []
+    parsed: list[dict] = []
+    for entry in entries:
+        match = ARTIFACT_RE.fullmatch(entry)
+        if not match:
+            errors.append(
+                "outline-draft: artifact must read '<id>: <status>, round n/3, "
+                f"verdict <pass|revise|none>', got '{entry}'"
+            )
+            continue
+        item = match.groupdict()
+        item["verdict"] = None if item["verdict"] == "none" else item["verdict"]
+        parsed.append(item)
+
+    ids = [item["id"] for item in parsed]
+    duplicates = sorted({artifact_id for artifact_id in ids if ids.count(artifact_id) > 1})
+    missing = [artifact_id for artifact_id in OUTLINE_ARTIFACT_IDS if artifact_id not in ids]
+    unknown = [artifact_id for artifact_id in ids if artifact_id not in OUTLINE_ARTIFACT_IDS]
+    if duplicates:
+        errors.append(f"outline-draft: duplicate artifacts: {', '.join(duplicates)}")
+    if missing:
+        errors.append(f"outline-draft: missing artifacts: {', '.join(missing)}")
+    if unknown:
+        errors.append(f"outline-draft: unknown artifacts: {', '.join(unknown)}")
+    known = [artifact_id for artifact_id in ids if artifact_id in OUTLINE_ARTIFACT_IDS]
+    expected_order = [artifact_id for artifact_id in OUTLINE_ARTIFACT_IDS if artifact_id in ids]
+    if known != expected_order:
+        errors.append("outline-draft: artifacts are not in required order")
+
+    by_id = {item["id"]: item for item in parsed if item["id"] in OUTLINE_ARTIFACT_IDS}
+    for artifact_id in OUTLINE_ARTIFACT_IDS:
+        item = by_id.get(artifact_id)
+        if item is None:
+            continue
+        status = item["status"]
+        verdict = item["verdict"]
+        if status not in ALLOWED_STATUSES:
+            errors.append(f"outline-draft/{artifact_id}: invalid status '{status}'")
+            continue
+        round_match = re.fullmatch(r"(\d+)/(\d+)", item["round"])
+        if not round_match:
+            errors.append(f"outline-draft/{artifact_id}: invalid round '{item['round']}'")
+            continue
+        current_round, max_round = map(int, round_match.groups())
+        if max_round != 3 or not 0 <= current_round <= 3:
+            errors.append(f"outline-draft/{artifact_id}: round must be n/3 with 0 <= n <= 3")
+        if status == "not-started" and (current_round != 0 or verdict is not None):
+            errors.append(f"outline-draft/{artifact_id}: not-started requires round 0/3 and verdict none")
+        if status == "awaiting-review" and (current_round == 0 or verdict is not None):
+            errors.append(f"outline-draft/{artifact_id}: awaiting-review requires round >= 1 and verdict none")
+        if status in {"approved", "awaiting-user"} and (current_round == 0 or verdict != "pass"):
+            errors.append(f"outline-draft/{artifact_id}: {status} requires round >= 1 and verdict pass")
+        if current_round >= 3 and verdict == "revise" and status != "escalated":
+            errors.append(f"outline-draft/{artifact_id}: round 3/3 revise requires status escalated")
+
+    # Artifacts are sequential user gates: a later one cannot start while an
+    # earlier one is anything other than approved.
+    for index, artifact_id in enumerate(OUTLINE_ARTIFACT_IDS[1:], start=1):
+        item = by_id.get(artifact_id)
+        if item and item["status"] != "not-started":
+            blockers = [prior for prior in OUTLINE_ARTIFACT_IDS[:index]
+                        if by_id.get(prior, {}).get("status") != "approved"]
+            if blockers:
+                errors.append(
+                    f"outline-draft/{artifact_id}: requires approved artifacts: "
+                    + ", ".join(blockers)
+                )
+
+    if stage.get("status") == "not-started" and any(
+        item["status"] != "not-started" for item in parsed
+    ):
+        errors.append("outline-draft: not-started stage requires all artifacts not-started")
+    if stage.get("status") == "approved":
+        incomplete = [artifact_id for artifact_id in OUTLINE_ARTIFACT_IDS
+                      if by_id.get(artifact_id, {}).get("status") != "approved"]
+        if incomplete:
+            errors.append(
+                "outline-draft: cannot be approved until all artifacts are approved: "
+                + ", ".join(incomplete)
+            )
+    return errors
+
+
 def open_preconditions(stage: dict) -> list[str]:
     """The unmet preconditions on a stage, in the order they were recorded."""
     texts = []
@@ -239,7 +345,8 @@ def validate_all(state_path: Path) -> dict[str, list[str]]:
         report["__workflow__"] = workflow_errors
 
     for stage in stages:
-        errors = validate_stage(stage) + validate_preconditions(stage)
+        errors = (validate_stage(stage) + validate_preconditions(stage)
+                  + validate_outline_artifacts(stage))
         if errors:
             report.setdefault(stage["id"], []).extend(errors)
 

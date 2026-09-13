@@ -127,3 +127,15 @@ CRLF가 어디서 들어오는지가 진짜 답입니다: **Windows에서 파이
 `paper-supervise`는 단계 **진입 시** 이를 읽어 사용자에게 먼저 보여주고(작업 후가 아니라), 검토가 나중 단계에 걸리는 것을 발견하면 그 단계에 기록합니다. 어느 단계 몇 라운드에서 나왔는지까지 적습니다.
 
 적용 즉시 실제 부채 7건이 산문에서 상태로 옮겨졌습니다 — `novelty-check` 2건(Gap의 `at all` 문구, 오래된 문단), `outline-draft` 2건(가산형 선택의 비교 근거, loss-penalty 대안 명시), `code-experiment` 3건(Kennedy & O'Hagan 등록, C0 파라미터 출처, 전사 오류 감지 게이트). 이제 그 단계들은 **승인 자체가 막힙니다.**
+
+---
+
+## F11. 복합 단계의 단일 라운드가 개요와 섹션 검토를 구분하지 못함 — `fixed`
+
+**관찰.** `outline-draft`는 개요 승인 뒤 Introduction·Related Work·Methods를 각각 생성·검토·승인하도록 요구하지만, 상태 파일에는 단계 전체의 `round` 하나만 있었습니다. 실제 검증에서 개요가 3/3에 통과한 뒤 Introduction 검토를 시작하자, 이를 기록할 곳이 없어 단계는 계속 `round: 3/3`인 채 `last-critic-issues` 문자열만 바뀌었습니다. 문자 그대로 읽으면 Introduction 검토가 허용되지 않은 네 번째 단계 시도이고, 반대로 검증기는 이를 유효한 상태로 받아들였습니다.
+
+**왜 문제인가.** 최대 3회 규칙이 무엇에 적용됐는지 감사할 수 없고, 중단 후 재개 시 어느 산출물이 몇 번째 검토인지 구조적으로 알 수 없습니다. 자유문 산문에 하위 진행을 넣는 방식은 F10에서 고친 것과 같은 종류의 구멍입니다.
+
+**개선(적용됨).** `outline-draft`에 `artifacts:` 원장을 추가해 `outline`, `introduction`, `related-work`, `methods`가 각자 status·round·verdict를 갖도록 했습니다. 네 산출물은 순서대로 앞선 승인을 요구하고 각자 3회 제한을 적용받습니다. 단계 자체의 `round`는 네 산출물이 모두 승인된 뒤 패키지 최종 검토에만 사용합니다. `check_paper_state.py`, reset 출력, 테스트 픽스처, `outline-draft`와 `paper-supervise` 스킬을 함께 갱신했습니다.
+
+이 과정에서 두 번째 충돌도 확인했습니다. 검증기는 작성된 모든 섹션에 비어 있지 않은 claim 선언을 요구하는데, 기존 `outline-draft` 스킬은 각 섹션이 최소 한 claim을 계획해야 한다고 말하지 않았습니다. 실제 개요가 Introduction의 planned claims를 `None`으로 승인해 버렸습니다. 스킬을 고쳐 작성될 모든 섹션에 최소 한 claim을 계획하고, Introduction·Related Work·Methods에서는 `assumed` claim을 결과가 아니라 가설·설계 조건으로만 운반하도록 명시했습니다.
