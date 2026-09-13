@@ -24,18 +24,16 @@ def stage_block(
     artifact_ledger = ""
     if stage_id == "outline-draft" and "artifacts:" not in extra:
         if status == "not-started":
-            artifact_statuses = ("not-started",) * 4
+            artifact_statuses = ("not-started",)
         elif status == "in-progress":
-            artifact_statuses = ("in-progress", "not-started", "not-started", "not-started")
+            artifact_statuses = ("in-progress",)
         else:
-            artifact_statuses = ("approved",) * 4
+            artifact_statuses = ("approved",)
         artifact_ledger = "artifacts:\n" + "".join(
             f"- {artifact_id}: {artifact_status}, "
             f"round {'0/3' if artifact_status == 'not-started' else '1/3'}, "
             f"verdict {'none' if artifact_status in {'not-started', 'in-progress'} else 'pass'}\n"
-            for artifact_id, artifact_status in zip(
-                ("outline", "introduction", "related-work", "methods"), artifact_statuses
-            )
+            for artifact_id, artifact_status in zip(("outline",), artifact_statuses)
         )
     return (
         f"## Stage: {stage_id}\n"
@@ -284,10 +282,7 @@ class TestValidateAll(unittest.TestCase):
                 "last-critic-verdict:\n"
                 "last-critic-issues:\n\n"
                 "## Stage: outline-draft\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n"
-                "artifacts:\n- outline: not-started, round 0/3, verdict none\n"
-                "- introduction: not-started, round 0/3, verdict none\n"
-                "- related-work: not-started, round 0/3, verdict none\n"
-                "- methods: not-started, round 0/3, verdict none\n\n"
+                "artifacts:\n- outline: not-started, round 0/3, verdict none\n\n"
                 "## Stage: code-experiment\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: results-discussion\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
                 "## Stage: figures-tables\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n\n"
@@ -443,6 +438,27 @@ class TestOutlineArtifacts(unittest.TestCase):
             "artifacts": artifacts or [],
         }
 
+    def outline_for(self, artifact_ids: list[str]) -> Path:
+        """A temp docs/outline.md whose Sections table names one front-matter
+        row per artifact id, matching what expected_outline_artifact_ids()
+        derives - these tests exercise validate_outline_artifacts() itself,
+        which trusts the ledger's own ids, so the outline only has to agree
+        with the ledger being tested, not model a whole real paper."""
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "outline.md"
+        rows = "\n".join(
+            f"| {i + 1} | `{artifact_id}.md` | Title | front-matter | | | |"
+            for i, artifact_id in enumerate(artifact_ids)
+        )
+        path.write_text(
+            "## Sections\n\n"
+            "| # | File | Title | Role | Narrative slot(s) | Claims | Purpose |\n"
+            "|---|---|---|---|---|---|---|\n" + rows + "\n",
+            encoding="utf-8",
+        )
+        return path
+
     def test_parses_artifact_ledger(self):
         with TemporaryDirectory() as tmp:
             path = write_state(
@@ -460,7 +476,8 @@ class TestOutlineArtifacts(unittest.TestCase):
             self.assertTrue(stage["artifacts"][1].startswith("introduction:"))
 
     def test_requires_complete_artifact_ledger(self):
-        errors = validate_outline_artifacts(self.stage(artifacts=[]))
+        outline = self.outline_for(["introduction"])
+        errors = validate_outline_artifacts(self.stage(artifacts=[]), outline)
         self.assertTrue(any("requires artifacts" in error for error in errors), errors)
 
     def test_approved_stage_requires_every_artifact_approved(self):
@@ -470,7 +487,8 @@ class TestOutlineArtifacts(unittest.TestCase):
             "related-work: awaiting-user, round 1/3, verdict pass",
             "methods: approved, round 1/3, verdict pass",
         ]
-        errors = validate_outline_artifacts(self.stage(status="approved", artifacts=artifacts))
+        outline = self.outline_for(["introduction", "related-work", "methods"])
+        errors = validate_outline_artifacts(self.stage(status="approved", artifacts=artifacts), outline)
         self.assertTrue(any("cannot be approved" in error for error in errors), errors)
 
     def test_artifact_at_third_revise_must_escalate(self):
@@ -480,7 +498,8 @@ class TestOutlineArtifacts(unittest.TestCase):
             "related-work: in-progress, round 3/3, verdict revise",
             "methods: not-started, round 0/3, verdict none",
         ]
-        errors = validate_outline_artifacts(self.stage(artifacts=artifacts))
+        outline = self.outline_for(["introduction", "related-work", "methods"])
+        errors = validate_outline_artifacts(self.stage(artifacts=artifacts), outline)
         self.assertTrue(any("related-work" in error and "escalated" in error for error in errors), errors)
 
     def test_valid_artifact_ledger_passes(self):
@@ -490,7 +509,23 @@ class TestOutlineArtifacts(unittest.TestCase):
             "related-work: awaiting-review, round 1/3, verdict none",
             "methods: not-started, round 0/3, verdict none",
         ]
-        self.assertEqual(validate_outline_artifacts(self.stage(artifacts=artifacts)), [])
+        outline = self.outline_for(["introduction", "related-work", "methods"])
+        self.assertEqual(validate_outline_artifacts(self.stage(artifacts=artifacts), outline), [])
+
+    def test_a_different_section_shape_is_accepted(self):
+        """The ledger is not pinned to introduction/related-work/methods - a
+        story that splits Related Work in two gets a different, equally
+        valid ledger, because the shape comes from docs/outline.md."""
+        artifacts = [
+            "outline: approved, round 1/3, verdict pass",
+            "introduction: approved, round 1/3, verdict pass",
+            "prior-art-industrial: approved, round 1/3, verdict pass",
+            "prior-art-academic: approved, round 1/3, verdict pass",
+            "methods: approved, round 1/3, verdict pass",
+        ]
+        outline = self.outline_for(["introduction", "prior-art-industrial", "prior-art-academic", "methods"])
+        errors = validate_outline_artifacts(self.stage(status="approved", artifacts=artifacts), outline)
+        self.assertEqual(errors, [])
 
 
 class TestCitationBookkeeping(unittest.TestCase):

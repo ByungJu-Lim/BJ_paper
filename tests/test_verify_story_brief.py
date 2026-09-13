@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from scripts.validation_common import is_concluding_section
 from scripts.verify_story_brief import (
     extract_section_claims,
-    is_concluding_section,
     parse_brief,
     validate_all,
     validate_claims,
@@ -237,9 +237,17 @@ class TestSectionDeclarations(unittest.TestCase):
             self.assertEqual(extract_section_claims(section), set())
 
     def test_concluding_sections_are_recognised(self):
-        self.assertTrue(is_concluding_section(Path("docs/sections/04-results.md")))
-        self.assertTrue(is_concluding_section(Path("docs/sections/06-conclusion.md")))
-        self.assertFalse(is_concluding_section(Path("docs/sections/01-introduction.md")))
+        roles = {"04-results.md": "concluding", "06-conclusion.md": "concluding",
+                 "01-introduction.md": "front-matter"}
+        self.assertTrue(is_concluding_section(Path("docs/sections/04-results.md"), roles))
+        self.assertTrue(is_concluding_section(Path("docs/sections/06-conclusion.md"), roles))
+        self.assertFalse(is_concluding_section(Path("docs/sections/01-introduction.md"), roles))
+
+    def test_concluding_role_comes_from_the_outline_not_the_filename(self):
+        """A section named 'results' with no outline entry is not concluding by
+        name alone - the outline's Sections table is what assigns the role."""
+        self.assertFalse(is_concluding_section(Path("docs/sections/04-results.md"), {}))
+        self.assertFalse(is_concluding_section(Path("docs/sections/04-results.md")))
 
 
 class TestValidateSections(unittest.TestCase):
@@ -270,9 +278,10 @@ class TestValidateSections(unittest.TestCase):
             intro = write_section(tmp, "01-introduction.md", "<!-- claims: C1 -->\n")
             results = write_section(tmp, "04-results.md", "<!-- claims: C1 -->\n")
             brief = self.brief({"C1": "assumed"})
+            roles = {"01-introduction.md": "front-matter", "04-results.md": "concluding"}
 
-            self.assertEqual(validate_sections(brief, [intro], False), [])
-            errors = validate_sections(brief, [results], False)
+            self.assertEqual(validate_sections(brief, [intro], False, roles), [])
+            errors = validate_sections(brief, [results], False, roles)
             self.assertTrue(any("states assumed claims as findings" in error for error in errors))
 
     def test_supported_claim_is_allowed_in_results(self):

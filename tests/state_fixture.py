@@ -67,15 +67,13 @@ def build_state(statuses: dict[str, str] | None = None, verified_sources: int | 
             blocks.extend(f"- {entry}" for entry in stage_preconditions)
         if stage_id == "outline-draft":
             if status == "not-started":
-                artifact_statuses = ("not-started",) * 4
+                artifact_statuses = ("not-started",)
             elif status == "in-progress":
-                artifact_statuses = ("in-progress", "not-started", "not-started", "not-started")
+                artifact_statuses = ("in-progress",)
             else:
-                artifact_statuses = ("approved",) * 4
+                artifact_statuses = ("approved",)
             blocks.append("artifacts:")
-            for artifact_id, artifact_status in zip(
-                ("outline", "introduction", "related-work", "methods"), artifact_statuses
-            ):
+            for artifact_id, artifact_status in zip(("outline",), artifact_statuses):
                 round_value, verdict = _ROUND_AND_VERDICT[artifact_status]
                 blocks.append(
                     f"- {artifact_id}: {artifact_status}, round {round_value}, "

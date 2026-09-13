@@ -2,21 +2,23 @@
 import re
 from pathlib import Path
 
+try:
+    from .validation_common import parse_outline_sections, section_artifact_id
+except ImportError:  # pragma: no cover - script execution path
+    from validation_common import parse_outline_sections, section_artifact_id
+
 STAGE_HEADER_RE = re.compile(r"^## Stage: (?P<id>.+)$")
 FIELD_RE = re.compile(r"^(?P<key>[\w-]+):\s*(?P<value>.*)$")
 ISSUE_RE = re.compile(r'^\s*-\s*"?(?P<issue>.*?)"?\s*$')
 
 TRACKED_SCALAR_FIELDS = ("status", "round", "last-critic-verdict", "verified-sources")
 LIST_FIELDS = ("last-critic-issues", "rejected-citations", "preconditions", "artifacts")
-# `outline-draft` contains four independently reviewed/user-approved artifacts.
-# Their review loops need their own counters; reusing the stage-level `round`
-# silently turns Introduction review 1 into outline review 4.
-OUTLINE_ARTIFACT_IDS = ("outline", "introduction", "related-work", "methods")
 ARTIFACT_RE = re.compile(
-    r"^(?P<id>[a-z][a-z-]*):\s*"
+    r"^(?P<id>[a-z][a-z0-9-]*):\s*"
     r"(?P<status>[a-z-]+),\s*round\s+(?P<round>\d+/\d+),\s*"
     r"verdict\s+(?P<verdict>pass|revise|none)$"
 )
+DEFAULT_OUTLINE_PATH = Path("docs/outline.md")
 # A review at one stage routinely turns up something a *later* stage must settle.
 # Prose in a notes file cannot bind it: the later session has no structural reason
 # to open that file. A precondition recorded here does bind it, because the stage
@@ -172,18 +174,41 @@ def validate_stage(stage: dict) -> list[str]:
     return errors
 
 
-def validate_outline_artifacts(stage: dict) -> list[str]:
+def expected_outline_artifact_ids(outline_path: Path) -> list[str]:
+    """`outline`, then one artifact per front-matter section in outline order.
+
+    `outline-draft` drafts only front-matter sections (by default
+    Introduction, Related Work, Methods) - concluding sections stay scaffolds
+    until `results-discussion` has real data to report. Before `outline-draft`
+    has written the Sections table (early in the pipeline, or right after a
+    reset), there is nothing to derive section artifacts from yet, so the
+    ledger is expected to carry only `outline` itself: the row `outline-draft`
+    produces before any section exists. Once the table exists, its row order
+    fixes the required order - a paper whose story needs a different shape
+    gets a different ledger, not a fixed four-artifact one.
+    """
+    rows = parse_outline_sections(outline_path)
+    front_matter = [row for row in rows if row["role"] == "front-matter"]
+    return ["outline"] + [section_artifact_id(row["file"]) for row in front_matter]
+
+
+def validate_outline_artifacts(stage: dict, outline_path: Path | None = None) -> list[str]:
     """Validate the nested review ledger used by `outline-draft`.
 
-    The stage-level round belongs to the final package review. The outline and
-    three pre-experiment sections each have a separate maximum-three review loop
-    and explicit user gate recorded here.
+    The stage-level round belongs to the final package review. The outline
+    itself and each front-matter section the outline lists (Introduction,
+    Related Work, Methods by default - but whatever `docs/outline.md`'s
+    Sections table actually says, since the story decides the shape) each
+    have a separate maximum-three review loop and explicit user gate
+    recorded here.
     """
     entries = stage.get("artifacts", [])
     if stage.get("id") != "outline-draft":
         return [f"{stage.get('id')}: artifacts belongs to outline-draft only"] if entries else []
+
+    expected_ids = expected_outline_artifact_ids(outline_path or DEFAULT_OUTLINE_PATH)
     if not entries:
-        return ["outline-draft: requires artifacts ledger for outline, introduction, related-work, methods"]
+        return [f"outline-draft: requires artifacts ledger for {', '.join(expected_ids)}"]
 
     errors: list[str] = []
     parsed: list[dict] = []
@@ -201,21 +226,21 @@ def validate_outline_artifacts(stage: dict) -> list[str]:
 
     ids = [item["id"] for item in parsed]
     duplicates = sorted({artifact_id for artifact_id in ids if ids.count(artifact_id) > 1})
-    missing = [artifact_id for artifact_id in OUTLINE_ARTIFACT_IDS if artifact_id not in ids]
-    unknown = [artifact_id for artifact_id in ids if artifact_id not in OUTLINE_ARTIFACT_IDS]
+    missing = [artifact_id for artifact_id in expected_ids if artifact_id not in ids]
+    unknown = [artifact_id for artifact_id in ids if artifact_id not in expected_ids]
     if duplicates:
         errors.append(f"outline-draft: duplicate artifacts: {', '.join(duplicates)}")
     if missing:
         errors.append(f"outline-draft: missing artifacts: {', '.join(missing)}")
     if unknown:
         errors.append(f"outline-draft: unknown artifacts: {', '.join(unknown)}")
-    known = [artifact_id for artifact_id in ids if artifact_id in OUTLINE_ARTIFACT_IDS]
-    expected_order = [artifact_id for artifact_id in OUTLINE_ARTIFACT_IDS if artifact_id in ids]
+    known = [artifact_id for artifact_id in ids if artifact_id in expected_ids]
+    expected_order = [artifact_id for artifact_id in expected_ids if artifact_id in ids]
     if known != expected_order:
         errors.append("outline-draft: artifacts are not in required order")
 
-    by_id = {item["id"]: item for item in parsed if item["id"] in OUTLINE_ARTIFACT_IDS}
-    for artifact_id in OUTLINE_ARTIFACT_IDS:
+    by_id = {item["id"]: item for item in parsed if item["id"] in expected_ids}
+    for artifact_id in expected_ids:
         item = by_id.get(artifact_id)
         if item is None:
             continue
@@ -242,10 +267,10 @@ def validate_outline_artifacts(stage: dict) -> list[str]:
 
     # Artifacts are sequential user gates: a later one cannot start while an
     # earlier one is anything other than approved.
-    for index, artifact_id in enumerate(OUTLINE_ARTIFACT_IDS[1:], start=1):
+    for index, artifact_id in enumerate(expected_ids[1:], start=1):
         item = by_id.get(artifact_id)
         if item and item["status"] != "not-started":
-            blockers = [prior for prior in OUTLINE_ARTIFACT_IDS[:index]
+            blockers = [prior for prior in expected_ids[:index]
                         if by_id.get(prior, {}).get("status") != "approved"]
             if blockers:
                 errors.append(
@@ -258,7 +283,7 @@ def validate_outline_artifacts(stage: dict) -> list[str]:
     ):
         errors.append("outline-draft: not-started stage requires all artifacts not-started")
     if stage.get("status") == "approved":
-        incomplete = [artifact_id for artifact_id in OUTLINE_ARTIFACT_IDS
+        incomplete = [artifact_id for artifact_id in expected_ids
                       if by_id.get(artifact_id, {}).get("status") != "approved"]
         if incomplete:
             errors.append(
@@ -321,7 +346,7 @@ def validate_citation_bookkeeping(stage: dict) -> list[str]:
     return []
 
 
-def validate_all(state_path: Path) -> dict[str, list[str]]:
+def validate_all(state_path: Path, outline_path: Path | None = None) -> dict[str, list[str]]:
     report: dict[str, list[str]] = {}
     stages = parse_stages(state_path)
     stage_ids = [stage["id"] for stage in stages]
@@ -346,7 +371,7 @@ def validate_all(state_path: Path) -> dict[str, list[str]]:
 
     for stage in stages:
         errors = (validate_stage(stage) + validate_preconditions(stage)
-                  + validate_outline_artifacts(stage))
+                  + validate_outline_artifacts(stage, outline_path))
         if errors:
             report.setdefault(stage["id"], []).extend(errors)
 
@@ -373,9 +398,12 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="Validate .omc/paper-state.md")
     parser.add_argument("--state", required=True, type=Path)
+    parser.add_argument("--outline", type=Path, default=DEFAULT_OUTLINE_PATH,
+                        help="docs/outline.md, whose Sections table decides the "
+                             "outline-draft artifact ledger's expected shape")
     args = parser.parse_args()
 
-    report = validate_all(args.state)
+    report = validate_all(args.state, args.outline)
     if not report:
         print("paper-state.md is valid.")
         # Printed on success as well: a precondition nobody reads binds nothing.

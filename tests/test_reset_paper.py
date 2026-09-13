@@ -224,10 +224,8 @@ class TestConfirmedReset(ResetPaperTestCase):
         self.assertFalse((root / "submissions/01-applied-thermal").exists())
         self.assertNotIn("## Attempt:",
                          (root / "submissions/submission-log.md").read_text(encoding="utf-8"))
-        self.assertIn("Drafted by results-discussion",
-                      (root / "docs/sections/04-results.md").read_text(encoding="utf-8"))
-        self.assertNotIn("The hybrid won.",
-                         (root / "docs/sections/04-results.md").read_text(encoding="utf-8"))
+        self.assertFalse((root / "docs/sections/04-results.md").exists())
+        self.assertIn("outline-draft", (root / "docs/outline.md").read_text(encoding="utf-8"))
 
     def test_raw_data_and_scaffolding_are_preserved(self):
         """data/raw holds inputs the script cannot regenerate and must never delete."""

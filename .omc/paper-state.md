@@ -29,9 +29,6 @@ last-critic-issues:
 preconditions:
 artifacts:
 - outline: not-started, round 0/3, verdict none
-- introduction: not-started, round 0/3, verdict none
-- related-work: not-started, round 0/3, verdict none
-- methods: not-started, round 0/3, verdict none
 
 ## Stage: code-experiment
 status: not-started

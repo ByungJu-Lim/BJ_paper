@@ -15,9 +15,9 @@
 1. `story-brief`: 논문의 논증을 6개 서사 슬롯과 주장 원장으로 먼저 고정
 2. `lit-review`: 실제 출처를 검색하고 메타데이터를 검증해 등록
 3. `novelty-check`: 등록된 출처와 논문의 주장을 비교
-4. `outline-draft`: 개요 승인 후 Introduction·Related Work·Methods 초안 작성. 결과 섹션은 빈 상태로 유지
+4. `outline-draft`: `docs/outline.md`에 논문 스토리에 맞는 섹션 구성(개수·이름·역할)을 직접 설계해 승인받은 뒤, front-matter 역할 섹션(기본형은 Introduction·Related Work·Methods)을 초안 작성. concluding 역할 섹션(기본형은 Results·Discussion·Conclusion)은 빈 상태로 유지
 5. `code-experiment`: 반증 조건 확인 후 실험·분석 실행 및 매니페스트 검증
-6. `results-discussion` + `figures-tables`: 코드 단계 승인 후 병렬 수행 가능. Results·Discussion·Conclusion과 그림·표를 완성
+6. `results-discussion` + `figures-tables`: 코드 단계 승인 후 병렬 수행 가능. `docs/outline.md`가 concluding으로 지정한 섹션(기본형 Results·Discussion·Conclusion)과 그림·표를 완성
 7. `citation-manage`: 두 결과 단계 승인 후 참고문헌 작성 및 인용·메타데이터 대조
 8. `polish-review`: 전체 초안의 최종 검토
 9. `submission-manage`: 투고처 선정, 제출본 고정, 심사 결과 반영. 실제 제출은 사용자가 수행

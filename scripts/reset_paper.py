@@ -28,14 +28,51 @@ TEMPLATE_NOTES = {
     "pipeline-findings.md",
 }
 
-SECTION_STUBS = {
-    "01-introduction.md": ("Introduction", "Drafted by the outline-draft skill once docs/outline.md is approved."),
-    "02-related-work.md": ("Related Work", "Drafted by outline-draft using docs/notes/novelty-matrix.md."),
-    "03-methods.md": ("Methods", "Drafted by outline-draft; updated after code-experiment."),
-    "04-results.md": ("Results", "Drafted by results-discussion from data/processed/."),
-    "05-discussion.md": ("Discussion", "Drafted by results-discussion; compare with docs/notes/novelty-matrix.md."),
-    "06-conclusion.md": ("Conclusion", "Drafted after results-discussion, before citation-manage."),
-}
+SECTION_STUBS_DIR = "docs/sections"  # directory cleared by clear_sections_directory()
+
+# The section-shape-agnostic outline template: a starting six-section default
+# plus the Sections table `outline-draft` overwrites to fit the approved
+# story. Kept here (not in SECTION_STUBS keyed by fixed filenames) because the
+# whole point of this change is that section count/names/roles are the
+# story's decision, not the template's.
+OUTLINE_TEMPLATE = """# Paper Outline
+
+> Filled in by the `outline-draft` skill from `docs/notes/story-brief.md` and
+> `docs/notes/novelty-matrix.md`, after `novelty-check` produces the matrix.
+> The number, order, title, and role of sections are decided by the paper's
+> own story — not fixed by this template. A different argument can need a
+> different shape (a split Related Work, an added Case Study section, a
+> combined Discussion-and-Conclusion), as long as every section maps back to
+> a narrative slot and every load-bearing claim lands somewhere.
+
+## Sections
+
+> One row per file under `docs/sections/`, in the order they appear in the
+> manuscript. `Role` is `front-matter` (may state `assumed` claims as
+> hypotheses or design conditions) or `concluding` (may never assert an
+> `assumed` claim as settled fact — `scripts/verify_story_brief.py` reads
+> this table, not the filename, to enforce that). `Claims` lists what the
+> section will carry once drafted; leave it blank until the section's
+> `<!-- claims: ... -->` declaration is actually written. Empty until
+> `outline-draft` designs the paper's actual shape from the approved story
+> brief and novelty matrix — a typical shape has an Introduction, Related
+> Work, and Methods (`front-matter`) followed by Results, Discussion, and
+> Conclusion (`concluding`), but the count, names, and split are the
+> story's call, not a fixed requirement.
+
+| # | File | Title | Role | Narrative slot(s) | Claims | Purpose |
+|---|---|---|---|---|---|---|
+
+Keep these invariants whatever shape the table ends up as:
+
+- Every row's file exists under `docs/sections/` with that exact basename.
+- `Context`/`Gap`/`Question` are covered by `front-matter` section(s);
+  `Approach` likewise; `Finding` and `Implication` are covered by
+  `concluding` section(s). A slot with no section role covering it means
+  the outline is incomplete.
+- File basenames stay sortable by number prefix (`01-`, `02-`, ...) so the
+  manuscript's read order matches directory order.
+"""
 
 STAGES = (
     "story-brief", "lit-review", "novelty-check", "outline-draft", "code-experiment",
@@ -43,14 +80,14 @@ STAGES = (
 )
 
 # check_paper_state.py requires these on citation-manage and rejects them anywhere
-# else, so they cannot simply be written onto every stage.
+# else, so they cannot simply be written onto every stage. outline-draft's ledger
+# has only the `outline` artifact until docs/outline.md's Sections table names
+# front-matter sections - a reset repository has no Sections table yet, so
+# `outline` not-started is the only entry `expected_outline_artifact_ids` allows.
 STAGE_EXTRA_FIELDS = {
     "outline-draft": (
         "artifacts:",
         "- outline: not-started, round 0/3, verdict none",
-        "- introduction: not-started, round 0/3, verdict none",
-        "- related-work: not-started, round 0/3, verdict none",
-        "- methods: not-started, round 0/3, verdict none",
     ),
     "citation-manage": ("verified-sources: 0", "rejected-citations:"),
 }
@@ -175,10 +212,25 @@ def reset_novelty_matrix(plan: Plan) -> None:
     plan.write(path, "\n".join(out), "novelty rows dropped")
 
 
-def reset_sections(plan: Plan) -> None:
-    for name, (title, comment) in SECTION_STUBS.items():
-        plan.write(plan.root / "docs/sections" / name,
-                   f"# {title}\n\n<!-- {comment} -->\n", "back to an empty stub")
+def reset_outline(plan: Plan) -> None:
+    """Outline sections are the previous paper's - the next paper's story picks
+    its own section count, names, and roles via `outline-draft`, so nothing
+    here is safe to keep as a stub tied to specific section files."""
+    path = plan.root / "docs/outline.md"
+    plan.write(path, OUTLINE_TEMPLATE, "reset to the section-shape-agnostic template")
+
+
+def clear_sections_directory(plan: Plan) -> None:
+    """Delete every file under docs/sections/ - the previous paper's outline
+    decided their names, count, and roles, and the next paper's outline may
+    decide differently. `outline-draft` recreates them from scratch."""
+    directory = plan.root / "docs/sections"
+    if not directory.is_dir():
+        return
+    for child in sorted(directory.iterdir()):
+        if child.name == ".gitkeep":
+            continue
+        plan.delete(child, "section file from the previous paper's outline")
 
 
 def reset_bibliography(plan: Plan) -> None:
@@ -302,7 +354,8 @@ def build_plan(root: Path, confirm: bool, template_repo: bool = False) -> Plan:
     reset_story_brief(plan)
     plan.write(root / "docs/notes/retrieved-sources.json", "[]\n", "source registry emptied")
     reset_novelty_matrix(plan)
-    reset_sections(plan)
+    reset_outline(plan)
+    clear_sections_directory(plan)
     reset_bibliography(plan)
     reset_submission_log(plan)
     delete_generated_notes(plan, template_repo)

@@ -23,19 +23,20 @@ from pathlib import Path, PureWindowsPath
 from urllib.parse import unquote
 
 if __package__:
-    from .validation_common import expand_paths, visible_markdown
+    from .validation_common import (expand_paths, is_concluding_section, outline_roles_by_file,
+                                    visible_markdown)
     from .check_paper_state import parse_stages, validate_all as validate_state
 else:
-    from validation_common import expand_paths, visible_markdown
+    from validation_common import (expand_paths, is_concluding_section, outline_roles_by_file,
+                                   visible_markdown)
     from check_paper_state import parse_stages, validate_all as validate_state
 
 DEFAULT_BRIEF_PATH = Path("docs/notes/story-brief.md")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
+DEFAULT_OUTLINE_PATH = Path("docs/outline.md")
 
 NARRATIVE_SLOTS = ("Context", "Gap", "Question", "Approach", "Finding", "Implication")
 CLAIM_STATUSES = ("assumed", "supported", "refuted")
-# Sections that report outcomes; an assumed claim may not be asserted in these.
-CONCLUDING_SECTION_MARKERS = ("results", "discussion", "conclusion")
 
 NARRATIVE_HEADER_RE = re.compile(r"^\|\s*Slot\s*\|\s*Sentence\s*\|$", re.IGNORECASE)
 CLAIM_HEADER_RE = re.compile(
@@ -329,12 +330,8 @@ def extract_section_claims(section_path: Path) -> set[str]:
     return claim_ids
 
 
-def is_concluding_section(section_path: Path) -> bool:
-    stem = section_path.stem.lower()
-    return any(marker in stem for marker in CONCLUDING_SECTION_MARKERS)
-
-
-def validate_sections(brief: dict, section_paths: list[Path], require_coverage: bool) -> list[str]:
+def validate_sections(brief: dict, section_paths: list[Path], require_coverage: bool,
+                      outline_roles: dict[str, str] | None = None) -> list[str]:
     errors: list[str] = []
     status_by_id = {claim["id"]: claim["status"] for claim in brief["claims"]}
     covered: set[str] = set()
@@ -360,7 +357,7 @@ def validate_sections(brief: dict, section_paths: list[Path], require_coverage: 
         if refuted:
             errors.append(f"{section_path}: carries refuted claims: {', '.join(refuted)}")
 
-        if is_concluding_section(section_path):
+        if is_concluding_section(section_path, outline_roles):
             assumed = sorted(cid for cid in declared if status_by_id.get(cid) == "assumed")
             if assumed:
                 errors.append(
@@ -386,6 +383,7 @@ def validate_all(
     registry_path: Path | None,
     processed_dir: Path,
     require_coverage: bool,
+    outline_path: Path | None = None,
 ) -> list[str]:
     brief = parse_brief(brief_path)
     errors = validate_narrative(brief, required_slots)
@@ -393,7 +391,8 @@ def validate_all(
     if required_slots and (not brief['claims'] or any(is_placeholder(c['claim']) for c in brief['claims'])):
         errors.append('claims: required research stage must contain written claims, not placeholders')
     errors.extend(validate_evidence(brief, registry_path, processed_dir, section_paths))
-    errors.extend(validate_sections(brief, section_paths, require_coverage))
+    outline_roles = outline_roles_by_file(outline_path) if outline_path else {}
+    errors.extend(validate_sections(brief, section_paths, require_coverage, outline_roles))
     if not is_placeholder(dict(brief['slots']).get('Finding', '')):
         if not any(RUN_EVIDENCE_RE.fullmatch(entry) for c in brief['claims'] for entry in parse_evidence(c['evidence'])):
             errors.append('Finding: a written result requires run:<run-id> evidence in the claims ledger')
@@ -423,6 +422,9 @@ def main() -> int:
         help="retrieved-sources registry used to resolve @key evidence",
     )
     parser.add_argument("--processed-dir", type=Path, default=DEFAULT_PROCESSED_DIR)
+    parser.add_argument("--outline", type=Path, default=DEFAULT_OUTLINE_PATH,
+                        help="docs/outline.md, whose Sections table assigns each "
+                             "section file its role (front-matter or concluding)")
     parser.add_argument('--state', type=Path, help='Derive artifact requirements from workflow review/approval state')
     parser.add_argument('--check-manifests', action='store_true', help='Require and validate all processed run manifests')
     parser.add_argument(
@@ -458,7 +460,8 @@ def main() -> int:
         if args.require_coverage and not sections:
             raise ValueError('final coverage requires section files')
         errors = validate_all(args.brief, sections, required_slots,
-                              args.registry, args.processed_dir, args.require_coverage)
+                              args.registry, args.processed_dir, args.require_coverage,
+                              args.outline)
         if args.check_manifests:
             manifests = sorted(args.processed_dir.glob('*.manifest.json'))
             if not manifests:
