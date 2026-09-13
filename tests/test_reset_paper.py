@@ -34,10 +34,10 @@ STORY_BRIEF = """# Story Brief
 |---|---|---|
 | `@key` | a registered source | `docs/notes/retrieved-sources.json` |
 
-| ID | Claim | Status | Evidence |
-|---|---|---|---|
-| C0 | The correlation is published. | assumed | |
-| C1 | Extrapolation is harder. | supported | @prev2024source |
+| ID | Claim | Status | Basis | Evidence |
+|---|---|---|---|---|
+| C0 | The correlation is published. | assumed | prospective | |
+| C1 | Extrapolation is harder. | supported | prospective | @prev2024source |
 
 ## Falsifiers
 
@@ -175,7 +175,7 @@ class TestConfirmedReset(ResetPaperTestCase):
         brief = (root / "docs/notes/story-brief.md").read_text(encoding="utf-8")
         self.assertIn("Prose that explains the format and must survive a reset.", brief)
         self.assertIn("| `@key` | a registered source |", brief)
-        self.assertIn("| ID | Claim | Status | Evidence |", brief)
+        self.assertIn("| ID | Claim | Status | Basis | Evidence |", brief)
         self.assertIn("This prose is the template and must survive.",
                       (root / "CLAUDE.md").read_text(encoding="utf-8"))
 

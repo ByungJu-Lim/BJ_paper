@@ -23,8 +23,8 @@ UNWRITTEN_BRIEF = '''# Story Brief
 
 ## Claims
 
-| ID | Claim | Status | Evidence |
-|---|---|---|---|
+| ID | Claim | Status | Basis | Evidence |
+|---|---|---|---|---|
 
 ## Falsifiers
 '''
@@ -51,9 +51,9 @@ WRITTEN_BRIEF = """# Story Brief
 
 ## Claims
 
-| ID | Claim | Status | Evidence |
-|---|---|---|---|
-| C1 | Extrapolation RMSE exceeds interpolation RMSE. | assumed | |
+| ID | Claim | Status | Basis | Evidence |
+|---|---|---|---|---|
+| C1 | Extrapolation RMSE exceeds interpolation RMSE. | assumed | prospective | |
 
 ## Falsifiers
 
@@ -61,9 +61,9 @@ WRITTEN_BRIEF = """# Story Brief
 """
 
 
-def claim(evidence='', status='supported'):
+def claim(evidence='', status='supported', basis='prospective'):
     return {'claims': [{'id': 'C1', 'claim': 'Efficiency improves',
-                        'status': status, 'evidence': evidence}],
+                        'status': status, 'basis': basis, 'evidence': evidence}],
             'falsifiers': {'C1': 'Measured efficiency does not improve.'}}
 
 

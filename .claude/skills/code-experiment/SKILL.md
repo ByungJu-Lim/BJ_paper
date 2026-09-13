@@ -1,16 +1,17 @@
 ---
 name: code-experiment
-description: Writes and runs experiment/analysis code, producing processed data under data/processed/. Use when the paper needs new experimental or analytical results.
+description: Writes and runs experiment/analysis code, or re-runs and registers existing prior results, producing manifested processed data under data/processed/. Use when the paper needs experimental/analytical results, whether newly run or already in hand.
 ---
 
 # Code and Experiments
 
 ## Procedure
 
-1. Read the approved story brief and ensure every planned experiment can test a written falsifier. Run `python scripts/verify_story_brief.py --require-slots Context,Gap,Question,Approach --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json` before execution. Commit the approved pre-experiment brief to preserve when the falsifiers were recorded. Delegate code under `code/`, reading only from `data/raw/`.
-2. Run the code and write its output to `data/processed/` — never modify files under `data/raw/`.
-3. Record what the code does and how to re-run it in a comment header at the top of the relevant file under `code/`.
-4. Write a run manifest next to the output as `data/processed/<run-id>.manifest.json`. Reviewers and the Methods section both depend on it, and a result that cannot be regenerated cannot be defended:
+1. Read the approved story brief and ensure every planned experiment can test a written falsifier — for a `retrospective` claim, the falsifier is checked against evidence already in hand, not a run yet to happen. Run `python scripts/verify_story_brief.py --require-slots Context,Gap,Question,Approach --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json` before execution. Commit the approved pre-experiment brief to preserve when the falsifiers were recorded. Delegate code under `code/`, reading only from `data/raw/`.
+2. If the code and its output already exist (a prior run predating this paper, moved under `code/` and `data/raw/`), re-run the existing command rather than writing new code — the manifest and reproducibility check below apply identically to a rerun of prior work and to a freshly written experiment. Only write new code where no prior run answers the claim.
+3. Run the code and write its output to `data/processed/` — never modify files under `data/raw/`.
+4. Record what the code does and how to re-run it in a comment header at the top of the relevant file under `code/`.
+5. Write a run manifest next to the output as `data/processed/<run-id>.manifest.json`. Reviewers and the Methods section both depend on it, and a result that cannot be regenerated cannot be defended:
    ```json
    {
      "run_id": "<slug>-<YYYY-MM-DD>",
@@ -24,7 +25,7 @@ description: Writes and runs experiment/analysis code, producing processed data 
    }
    ```
    Use an integer seed or JSON `null` for deterministic code without randomness. Paths are relative to the project root, remain inside it and must exist: script under `code/`, nonempty inputs, and result outputs under `data/processed/`. The manifest itself is not a result output. Record full package versions (or `{}` for stdlib-only code). For nondeterminism, record its cause under `nondeterminism` and report repeated-run variability.
-5. Check the manifest's structure, then check that the run actually reproduces.
+6. Check the manifest's structure, then check that the run actually reproduces.
    These are two different questions and only the first one is cheap:
    ```bash
    python scripts/verify_story_brief.py --check-manifests --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json

@@ -37,10 +37,11 @@ DEFAULT_OUTLINE_PATH = Path("docs/outline.md")
 
 NARRATIVE_SLOTS = ("Context", "Gap", "Question", "Approach", "Finding", "Implication")
 CLAIM_STATUSES = ("assumed", "supported", "refuted")
+CLAIM_BASES = ("prospective", "retrospective")
 
 NARRATIVE_HEADER_RE = re.compile(r"^\|\s*Slot\s*\|\s*Sentence\s*\|$", re.IGNORECASE)
 CLAIM_HEADER_RE = re.compile(
-    r"^\|\s*ID\s*\|\s*Claim\s*\|\s*Status\s*\|\s*Evidence\s*\|$", re.IGNORECASE
+    r"^\|\s*ID\s*\|\s*Claim\s*\|\s*Status\s*\|\s*Basis\s*\|\s*Evidence\s*\|$", re.IGNORECASE
 )
 TABLE_DIVIDER_RE = re.compile(r"^\|[\s:|-]+\|$")
 # The colon may sit inside or outside the bold markers: `- **C1:** ...` or `- **C1**: ...`
@@ -89,13 +90,14 @@ def parse_brief(brief_path: Path) -> dict:
             slots = [(row[0], row[1] if len(row) > 1 else "") for row in _read_table(lines, index)]
         elif CLAIM_HEADER_RE.match(stripped):
             for row in _read_table(lines, index):
-                padded = row + [""] * (4 - len(row))
+                padded = row + [""] * (5 - len(row))
                 claims.append(
                     {
                         "id": padded[0],
                         "claim": padded[1],
                         "status": padded[2],
-                        "evidence": padded[3],
+                        "basis": padded[3],
+                        "evidence": padded[4],
                     }
                 )
         else:
@@ -159,6 +161,14 @@ def validate_claims(brief: dict) -> list[str]:
                 f"{claim_id}: invalid status '{status}', "
                 f"expected one of {', '.join(CLAIM_STATUSES)}"
             )
+
+        basis = claim.get("basis", "")
+        if not is_placeholder(claim["claim"]) or status in {"supported", "refuted"}:
+            if basis not in CLAIM_BASES:
+                errors.append(
+                    f"{claim_id}: invalid basis '{basis}', "
+                    f"expected one of {', '.join(CLAIM_BASES)}"
+                )
 
         evidence = parse_evidence(claim["evidence"])
         if status in {"supported", "refuted"} and not evidence:

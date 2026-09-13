@@ -33,8 +33,8 @@ def brief_text(narrative: str = NARRATIVE_TABLE, claims: str = "", falsifiers: s
         "# Story Brief\n\n"
         "## Narrative\n\n" + narrative + "\n"
         "## Claims\n\n"
-        "| ID | Claim | Status | Evidence |\n"
-        "|---|---|---|---|\n" + claims + "\n"
+        "| ID | Claim | Status | Basis | Evidence |\n"
+        "|---|---|---|---|---|\n" + claims + "\n"
         "## Falsifiers\n\n" + falsifiers
     )
 
@@ -57,7 +57,7 @@ class TestParseBrief(unittest.TestCase):
             brief_path = write_brief(
                 tmp,
                 brief_text(
-                    claims="| C1 | Ramps drive degradation | supported | run:2026-09-07-a |\n",
+                    claims="| C1 | Ramps drive degradation | supported | prospective | run:2026-09-07-a |\n",
                     falsifiers="- **C1:** Degradation tracks runtime instead of ramp count.\n",
                 ),
             )
@@ -67,6 +67,7 @@ class TestParseBrief(unittest.TestCase):
             self.assertEqual(len(brief["claims"]), 1)
             self.assertEqual(brief["claims"][0]["id"], "C1")
             self.assertEqual(brief["claims"][0]["status"], "supported")
+            self.assertEqual(brief["claims"][0]["basis"], "prospective")
             self.assertEqual(brief["claims"][0]["evidence"], "run:2026-09-07-a")
             self.assertIn("C1", brief["falsifiers"])
 
@@ -74,7 +75,7 @@ class TestParseBrief(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             brief_path = write_brief(
                 tmp,
-                brief_text(claims="| C1 | A claim | assumed | |\n")
+                brief_text(claims="| C1 | A claim | assumed | | |\n")
                 + "\n## Evidence forms\n\n| Form | Meaning |\n|---|---|\n| @key | a source |\n",
             )
             brief = parse_brief(brief_path)
@@ -127,7 +128,7 @@ class TestValidateClaims(unittest.TestCase):
     def test_supported_claim_requires_evidence(self):
         errors = validate_claims(
             self.brief(
-                [{"id": "C1", "claim": "x", "status": "supported", "evidence": ""}],
+                [{"id": "C1", "claim": "x", "status": "supported", "basis": "prospective", "evidence": ""}],
                 {"C1": "something measurable"},
             )
         )
@@ -136,7 +137,7 @@ class TestValidateClaims(unittest.TestCase):
     def test_supported_claim_requires_written_falsifier(self):
         errors = validate_claims(
             self.brief(
-                [{"id": "C1", "claim": "x", "status": "supported", "evidence": "@kim2021"}],
+                [{"id": "C1", "claim": "x", "status": "supported", "basis": "prospective", "evidence": "@kim2021"}],
                 {"C1": "_입력 필요_"},
             )
         )
@@ -153,7 +154,7 @@ class TestValidateClaims(unittest.TestCase):
             [],
         )
         errors = validate_claims(
-            self.brief([{"id": "C1", "claim": "x", "status": "assumed", "evidence": ""}], {})
+            self.brief([{"id": "C1", "claim": "x", "status": "assumed", "basis": "prospective", "evidence": ""}], {})
         )
         self.assertTrue(any("no falsifier recorded" in error for error in errors))
 
@@ -161,9 +162,9 @@ class TestValidateClaims(unittest.TestCase):
         errors = validate_claims(
             self.brief(
                 [
-                    {"id": "X1", "claim": "x", "status": "assumed", "evidence": ""},
-                    {"id": "C1", "claim": "x", "status": "maybe", "evidence": ""},
-                    {"id": "C1", "claim": "x", "status": "assumed", "evidence": ""},
+                    {"id": "X1", "claim": "x", "status": "assumed", "basis": "prospective", "evidence": ""},
+                    {"id": "C1", "claim": "x", "status": "maybe", "basis": "prospective", "evidence": ""},
+                    {"id": "C1", "claim": "x", "status": "assumed", "basis": "prospective", "evidence": ""},
                 ],
                 {"C1": "f"},
             )
@@ -175,18 +176,40 @@ class TestValidateClaims(unittest.TestCase):
     def test_falsifier_for_unknown_claim_is_flagged(self):
         errors = validate_claims(
             self.brief(
-                [{"id": "C1", "claim": "x", "status": "assumed", "evidence": ""}],
+                [{"id": "C1", "claim": "x", "status": "assumed", "basis": "prospective", "evidence": ""}],
                 {"C1": "f", "C9": "f"},
             )
         )
         self.assertTrue(any("falsifiers: no such claim: C9" in error for error in errors))
+
+    def test_missing_basis_is_flagged_for_a_written_claim(self):
+        errors = validate_claims(
+            self.brief(
+                [{"id": "C1", "claim": "x", "status": "assumed", "evidence": ""}],
+                {"C1": "f"},
+            )
+        )
+        self.assertTrue(any("invalid basis ''" in error for error in errors))
+
+    def test_retrospective_basis_is_accepted(self):
+        self.assertEqual(
+            validate_claims(
+                self.brief(
+                    [{"id": "C1", "claim": "x", "status": "supported", "basis": "retrospective",
+                      "evidence": "@kim2021"}],
+                    {"C1": "the prior run's win margin would have been below threshold"},
+                )
+            ),
+            [],
+        )
 
 
 class TestValidateEvidence(unittest.TestCase):
     def brief(self, evidence):
         return {
             "slots": [],
-            "claims": [{"id": "C1", "claim": "x", "status": "supported", "evidence": evidence}],
+            "claims": [{"id": "C1", "claim": "x", "status": "supported", "basis": "prospective",
+                       "evidence": evidence}],
             "falsifiers": {"C1": "f"},
         }
 
@@ -314,7 +337,7 @@ class TestValidateAll(unittest.TestCase):
             brief_path = write_brief(
                 tmp,
                 brief_text(
-                    claims="| C1 | Ramps drive degradation | supported | trust me |\n",
+                    claims="| C1 | Ramps drive degradation | supported | prospective | trust me |\n",
                     falsifiers="- **C1:** _입력 필요_\n",
                 ),
             )

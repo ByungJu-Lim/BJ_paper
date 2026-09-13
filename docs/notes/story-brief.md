@@ -32,6 +32,19 @@ Every load-bearing statement the paper makes, with what currently backs it.
 - `refuted` — the evidence went the other way. Rewrite the narrative slot that
   depended on it; the claim stays here as a record.
 
+`Basis` records when the falsifier was written relative to seeing the result —
+this is an honesty record, not a gate. Both bases require the same falsifier
+and evidence; a `supported` claim asserts equally regardless of which one it
+carries.
+
+- `prospective` — the falsifier was written before the experiment/search that
+  resolves the claim ran.
+- `retrospective` — the claim starts from evidence the paper already had
+  (a prior run, an existing dataset, previously written code) before this
+  brief was written. The falsifier is written now, against that existing
+  evidence, not invented after the fact to match it — it must be a
+  condition the evidence could still fail, or it is not a falsifier.
+
 Evidence entries are comma-separated and take one of three forms:
 
 | Form | Meaning | Checked against |
@@ -40,13 +53,16 @@ Evidence entries are comma-separated and take one of three forms:
 | `run:<run-id>` | an experiment run | `data/processed/<run-id>.manifest.json` |
 | `Fig. N` / `Table N` | a figure or table in this paper | the section that renders it |
 
-| ID | Claim | Status | Evidence |
-|---|---|---|---|
+| ID | Claim | Status | Basis | Evidence |
+|---|---|---|---|---|
 
 ## Falsifiers
 
-What result would force each claim to be rewritten. Written *before* the
-experiment, not after.
+What result would force each claim to be rewritten. For a `prospective` claim,
+written *before* the experiment. For a `retrospective` claim, written against
+evidence the paper already has — state what about that existing evidence
+would have forced the claim to be rewritten, not a condition it is already
+known to satisfy.
 
 
 ## Section coverage
@@ -92,9 +108,12 @@ Table 1: Comparison
 
 The image must be a nonempty local file inside the project; the table must have
 a header, separator and data row. Mentioning `Fig. 1` in prose is insufficient.
-Every written claim needs a written falsifier, including `assumed` claims. Keep
-the approved pre-experiment version in Git; the validator cannot prove when a
-falsifier was written. A written `Finding` needs run evidence in the claims ledger.
+Every written claim needs a written falsifier, including `assumed` claims, and
+a `basis` of `prospective` or `retrospective`. Keep the approved pre-experiment
+version in Git; the validator cannot prove when a `prospective` falsifier was
+written, or that a `retrospective` one was not quietly reverse-engineered from
+the result — that is what the committed history and the critic review are for.
+A written `Finding` needs run evidence in the claims ledger.
 
 Use `--state .omc/paper-state.md` to apply requirements for approved stages,
 `--check-manifests` after experiments, and `--require-slots all --require-coverage`

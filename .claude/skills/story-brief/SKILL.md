@@ -33,24 +33,41 @@ Three mechanisms enforce it:
 
 ## Procedure
 
-1. Delegate to `writer` (with `analyst` where the framing is unclear): fill the
+1. Inventory what already exists before writing anything: `code/`, `data/raw/`,
+   `data/processed/`, and `docs/sources/`. Most papers start from evidence the
+   author already has — prior runs, an existing dataset, code already written
+   — not from a blank slate. That is a normal starting point this brief must
+   represent honestly, not a shortcut to hide. Existing evidence changes what
+   the brief can say immediately (see "Basis" below); it does not exempt any
+   claim from a falsifier or from evidence that resolves.
+2. Delegate to `writer` (with `analyst` where the framing is unclear): fill the
    `Context`, `Gap`, and `Question` slots of `docs/notes/story-brief.md`. One
-   sentence each. Leave `Approach`, `Finding`, and `Implication` as placeholders
-   — they are not knowable yet, and guessing them is what causes the story to
-   drive the evidence.
-2. List the load-bearing claims the paper will need, as `C1`, `C2`, … Each
+   sentence each. `Approach`, `Finding`, and `Implication` may be filled now if
+   step 1 found existing code, data, or results that already answer them —
+   otherwise leave them as placeholders; guessing them is what causes the
+   story to drive the evidence.
+3. List the load-bearing claims the paper will need, as `C1`, `C2`, … Each
    starts at `status: assumed` with an empty `Evidence` cell, and each gets a
-   falsifier line. A claim with no falsifier is not a claim, it is an opinion.
-3. Run the check:
+   falsifier line and a `basis`:
+   - `prospective` if the falsifier is written before the run/search that
+     resolves the claim.
+   - `retrospective` if the claim starts from evidence already in hand
+     (step 1). Write the falsifier now, against that existing evidence — a
+     condition it could still fail, not one it is already known to satisfy.
+   A claim with no falsifier is not a claim, it is an opinion, regardless of
+   basis.
+4. Run the check:
    ```bash
    python scripts/verify_story_brief.py --require-slots Context,Gap,Question --registry docs/notes/retrieved-sources.json --sections "docs/sections/*.md"
    ```
-4. Fill in `CLAUDE.md`'s **가제** from the `Question` slot. Leave **목표 학술지**
+5. Fill in `CLAUDE.md`'s **가제** from the `Question` slot. Leave **목표 학술지**
    until `Finding` exists — the size of the finding picks the venue, not the
    other way round.
-5. Hand off to `paper-supervise` for the critic round, then the user-approval
+6. Hand off to `paper-supervise` for the critic round, then the user-approval
    gate. The brief is a fixed gate: the user approves the argument before any
-   literature search runs against it.
+   literature search runs against it. For a claim marked `retrospective`, the
+   critic checks the falsifier is a real condition the existing evidence
+   could have failed, not a restatement of what it already shows.
 
 ## Revisiting the brief at each later stage
 
@@ -67,6 +84,10 @@ Three mechanisms enforce it:
 
 - Never change a claim's status without evidence that resolves. `supported` with
   a hand-waved justification is the same failure mode as a fabricated citation.
+- `retrospective` basis changes when the falsifier was written, not what it
+  takes to satisfy it — the same falsifier, evidence, and status rules apply
+  as for a `prospective` claim. It exists to keep the ledger honest about
+  order, not to grant a weaker claim.
 - Never delete a `refuted` claim. It stays as a record of what the evidence did,
   and the verifier keeps it out of the sections.
 - Never let the brief's `Finding` outrun `data/processed/`. If a run manifest
