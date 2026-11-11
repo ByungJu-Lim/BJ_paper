@@ -17,7 +17,7 @@ Delegate to `critic` to review the full draft (`docs/sections/*.md` in order) ag
 Additionally check, specific to a final pass: that the paper still tells the
 story in `docs/notes/story-brief.md` — read the six slots in order, then read
 the section openings in order, and confirm they are the same argument;
-terminology consistency across sections, that every in-text citation key also appears in `refs/references.bib`, and tense/voice consistency (English, target venue).
+terminology consistency across sections; compliance with `docs/notes/scientific-writing-rules.md` (user rule 2026-11-05): the section-specific rules of its section 7, the prohibited patterns of section 8 and the checklist of section 9, applied without changing meaning, numbers or certainty; that every in-text citation key also appears in `refs/references.bib`, and tense/voice consistency (English, target venue).
 
 ## Procedure
 

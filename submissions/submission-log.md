@@ -5,6 +5,7 @@
 >
 > status: preparing | submitted | under-review | minor-revision | major-revision
 >         | accepted | rejected | desk-rejected | withdrawn
+>         | abandoned (closed before submission; reason in no-feedback-reason)
 >
 > Copy this block for a new attempt (delete the comment markers):
 >

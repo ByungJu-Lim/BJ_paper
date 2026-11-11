@@ -4,8 +4,8 @@
   "dpi": 300,
   "column_width_mm": { "single": 90, "double": 190 },
   "color_mode": "cmyk",
-  "font_family": "Arial",
-  "min_font_pt": 7,
+  "font_family": "Times New Roman",
+  "min_font_pt": 9,
   "main_figures": ["fig1", "fig2"],
   "supplementary_figures": [],
   "notes": "Colour is charged in print at this venue - fig2 was redrawn with hatching."

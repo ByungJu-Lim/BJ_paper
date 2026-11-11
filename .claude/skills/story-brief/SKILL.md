@@ -90,6 +90,11 @@ Three mechanisms enforce it:
   order, not to grant a weaker claim.
 - Never delete a `refuted` claim. It stays as a record of what the evidence did,
   and the verifier keeps it out of the sections.
+- A claim whose evidence no longer bears on the manuscript (its model or method
+  was corrected) becomes `superseded`, keeping its evidence and falsifier. A
+  registered claim the user decides not to test becomes `withdrawn`, keeping its
+  falsifier; setting it back to `assumed` reopens it. Neither is deleted, no
+  section may declare either, and `--require-coverage` skips both.
 - Never let the brief's `Finding` outrun `data/processed/`. If a run manifest
   does not exist, the finding is not a finding.
 - Two sentences in one slot means the argument is not sharp enough yet. Split

@@ -14,6 +14,8 @@ description: Analyzes processed experiment data and drafts the Results and Discu
    Study section carrying `Finding`) or split them further; draft whatever
    the table actually lists, at the exact basenames it names.
 2. Delegate to `scientist`: analyze the contents of `data/processed/` (statistics, trends, anomalies relevant to the paper's claims).
+   Both `writer` delegations below follow `docs/notes/scientific-writing-rules.md`
+   (user rule 2026-11-05; Results, Discussion and Conclusions rules in its section 7).
 3. Delegate to `writer`: draft the `concluding` section(s) that carry the
    `Finding` slot (by default `docs/sections/04-results.md`) as an objective
    report of what the data shows — no interpretation here.

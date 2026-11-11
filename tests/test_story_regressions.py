@@ -164,9 +164,11 @@ class TestStoryRegressions(unittest.TestCase):
             state = write_state(directory / 'state.md', with_stage('story-brief', 'approved'))
             brief = directory / 'brief.md'
             brief.write_text(UNWRITTEN_BRIEF, encoding='utf-8')
-            result = subprocess.run([sys.executable, 'scripts/verify_story_brief.py',
+            # cwd is the fixture: the validator reads docs/outline.md relative to
+            # cwd, and the live outline must not decide which ledger is valid.
+            result = subprocess.run([sys.executable, str(root / 'scripts/verify_story_brief.py'),
                                      '--state', str(state), '--brief', str(brief)],
-                                    cwd=root, capture_output=True, text=True, encoding='utf-8')
+                                    cwd=directory, capture_output=True, text=True, encoding='utf-8')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('Context', result.stdout)
 
@@ -179,9 +181,11 @@ class TestStoryRegressions(unittest.TestCase):
             state = write_state(directory / 'state.md', with_stage('story-brief', 'approved'))
             brief = directory / 'brief.md'
             brief.write_text(WRITTEN_BRIEF, encoding='utf-8')
-            result = subprocess.run([sys.executable, 'scripts/verify_story_brief.py',
+            # cwd is the fixture: the validator reads docs/outline.md relative to
+            # cwd, and the live outline must not decide which ledger is valid.
+            result = subprocess.run([sys.executable, str(root / 'scripts/verify_story_brief.py'),
                                      '--state', str(state), '--brief', str(brief)],
-                                    cwd=root, capture_output=True, text=True, encoding='utf-8')
+                                    cwd=directory, capture_output=True, text=True, encoding='utf-8')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 

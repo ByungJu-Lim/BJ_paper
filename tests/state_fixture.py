@@ -118,3 +118,15 @@ def write_state(path: Path, statuses: dict[str, str] | None = None,
                 preconditions: dict[str, list[str]] | None = None) -> Path:
     path.write_text(build_state(statuses, verified_sources, preconditions), encoding="utf-8")
     return path
+
+
+def absent_outline(state_path: Path) -> Path:
+    """An outline path beside `state_path` that does not exist.
+
+    `check_paper_state.validate_all` derives the outline-draft artifact ledger
+    from `docs/outline.md`'s Sections table, and defaults to the live outline
+    when none is given. A test that wants the template-shaped ledger (just
+    `outline`) passes this instead, so the result does not depend on how the
+    real paper has structured its sections.
+    """
+    return Path(state_path).parent / "no-outline.md"

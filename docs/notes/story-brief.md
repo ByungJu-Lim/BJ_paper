@@ -31,6 +31,14 @@ Every load-bearing statement the paper makes, with what currently backs it.
 - `supported` — backed by the listed evidence.
 - `refuted` — the evidence went the other way. Rewrite the narrative slot that
   depended on it; the claim stays here as a record.
+- `superseded` — a claim whose evidence no longer bears on this manuscript
+  (for example, runs of a model or method that was later corrected). It keeps
+  its evidence and falsifier as a record, no section may carry it, and the
+  coverage check skips it.
+- `withdrawn` — a registered claim that was never tested, set only on the
+  user's scope decision (for example, a run dropped before it started). It
+  needs no evidence but keeps its falsifier, no section may carry it, and the
+  coverage check skips it. Returning it to `assumed` reopens it.
 
 `Basis` records when the falsifier was written relative to seeing the result —
 this is an honesty record, not a gate. Both bases require the same falsifier

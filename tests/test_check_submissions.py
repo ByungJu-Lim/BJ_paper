@@ -168,8 +168,62 @@ class TestValidateAttempt(unittest.TestCase):
         )
         self.assertEqual(validate_attempt(attempt, today=TODAY), [])
 
+    def test_abandoned_attempt_with_reason_is_valid(self):
+        attempt = self.parse_one(
+            attempt_block(
+                "01-applied-energy",
+                status="abandoned",
+                submitted_on=None,
+                manuscript_tag=None,
+                no_feedback_reason="Venue changed before submission.",
+            )
+        )
+        self.assertEqual(validate_attempt(attempt, today=TODAY), [])
+
+    def test_abandoned_attempt_requires_reason(self):
+        attempt = self.parse_one(
+            attempt_block(
+                "01-applied-energy", status="abandoned", submitted_on=None, manuscript_tag=None
+            )
+        )
+        errors = validate_attempt(attempt, today=TODAY)
+        self.assertTrue(any("requires no-feedback-reason" in error for error in errors))
+
+    def test_abandoned_attempt_must_not_look_submitted(self):
+        attempt = self.parse_one(
+            attempt_block(
+                "01-applied-energy",
+                status="abandoned",
+                no_feedback_reason="Venue changed before submission.",
+            )
+        )
+        errors = validate_attempt(attempt, today=TODAY)
+        self.assertTrue(any("must not have submitted-on" in error for error in errors))
+        self.assertTrue(any("must not have manuscript-tag" in error for error in errors))
+
 
 class TestValidateLedger(unittest.TestCase):
+    def test_abandoned_attempt_lets_next_venue_open(self):
+        with TemporaryDirectory() as tmp:
+            path = write_log(
+                tmp,
+                attempt_block(
+                    "01-applied-energy",
+                    status="abandoned",
+                    submitted_on=None,
+                    manuscript_tag=None,
+                    no_feedback_reason="Venue changed before submission.",
+                ),
+                attempt_block(
+                    "02-energy-conversion",
+                    venue="Energy Conversion and Management",
+                    status="preparing",
+                    submitted_on=None,
+                    manuscript_tag=None,
+                ),
+            )
+            self.assertEqual(validate_ledger(path, today=TODAY), {})
+
     def test_rejection_then_new_attempt_is_valid(self):
         with TemporaryDirectory() as tmp:
             path = write_log(

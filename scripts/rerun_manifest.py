@@ -21,6 +21,13 @@ else under data/processed is reported as a failure rather than tidied away: an
 untraceable file in the evidence directory is a manifest that does not describe
 its own run.
 
+A manifest may also record `renders` (published path -> SHA-256 of figures,
+tables and captions written outside the evidence directory). Those files and the
+manifest itself are stashed and restored like the outputs. A render whose bytes
+differ after the re-run is printed as a warning, not a failure: rasterised text
+depends on matplotlib/FreeType builds, and the reproducibility claim rests on the
+data outputs.
+
 A manifest may declare `nondeterminism` (a string saying what varies and why).
 Differing bytes are then reported as declared variance rather than a failure -
 but they are still printed, because "it varies" is a claim the reviewer has to
@@ -67,13 +74,38 @@ def check_environment(manifest: dict) -> list[str]:
         from importlib.metadata import PackageNotFoundError, version as installed_version
         for package, pinned in sorted(dependencies.items()):
             try:
-                found = installed_version(package)
+                found = _runtime_version(package) or installed_version(package)
             except PackageNotFoundError:
                 notes.append(f'{package} {pinned} recorded, not installed')
                 continue
             if found != pinned:
                 notes.append(f'{package} {pinned} recorded, {found} installed')
     return notes
+
+
+def _runtime_version(name: str) -> str | None:
+    """Versions that are not pip distributions: the interpreter and matplotlib's FreeType."""
+    if name == 'python':
+        return '.'.join(str(part) for part in sys.version_info[:3])
+    if name == 'freetype':
+        try:
+            from matplotlib import ft2font
+        except ImportError:
+            return None
+        return str(ft2font.__freetype_version__)
+    return None
+
+
+def resolve_renders(manifest: dict, root: Path) -> dict[Path, str]:
+    renders = manifest.get('renders')
+    if not isinstance(renders, dict):
+        return {}
+    out: dict[Path, str] = {}
+    for value, recorded in renders.items():
+        path = (root / str(value)).resolve()
+        if path.is_relative_to(root):
+            out[path] = str(recorded)
+    return out
 
 
 def resolve_outputs(manifest: dict, root: Path) -> tuple[list[Path], list[str]]:
@@ -165,6 +197,8 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
         report.append('  dry-run: not executed')
         return True, report
 
+    renders = resolve_renders(manifest, root)
+    protected = list(dict.fromkeys([*outputs, manifest_path.resolve(), *renders]))
     before = {path: digest(path) for path in outputs}
     evidence_dir = (processed_dir or (root / DEFAULT_PROCESSED_DIR)).resolve()
     before_files = _snapshot(evidence_dir)
@@ -174,21 +208,22 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
 
     with TemporaryDirectory() as tmp:
         stash = Path(tmp)
-        for index, path in enumerate(outputs):
-            shutil.copy2(path, stash / f'{index}.bin')
+        for index, path in enumerate(protected):
+            if path.is_file():
+                shutil.copy2(path, stash / f'{index}.bin')
         try:
             completed = subprocess.run(command, cwd=root, shell=True, capture_output=True,
                                        text=True, encoding='utf-8', errors='replace',
                                        timeout=timeout)
         except subprocess.TimeoutExpired:
             if not keep_rerun:
-                _restore(outputs, stash)
+                _restore(protected, stash)
             report.append(f'  FAIL: command exceeded {timeout}s')
             return False, report
 
         if completed.returncode != 0:
             if not keep_rerun:
-                _restore(outputs, stash)
+                _restore(protected, stash)
             report.append(f'  FAIL: command exited {completed.returncode}')
             tail = (completed.stderr or completed.stdout or '').strip().splitlines()[-10:]
             report.extend(f'    | {line}' for line in tail)
@@ -201,6 +236,10 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
             elif digest(path) != before[path]:
                 differing.append(relative)
 
+        render_warnings = [
+            path.relative_to(root).as_posix() for path, recorded in renders.items()
+            if not path.is_file() or digest(path) != recorded]
+
         declared = set(outputs) | {manifest_path.resolve()}
         undeclared = sorted(
             path.relative_to(root).as_posix()
@@ -208,8 +247,12 @@ def rerun(manifest_path: Path, root: Path, timeout: int, dry_run: bool,
             if path not in declared and before_files.get(path) != mtime)
 
         if not keep_rerun:
-            _restore(outputs, stash)
+            _restore(protected, stash)
 
+    for relative in render_warnings:
+        report.append(f'  warning: render differs from its recorded SHA-256: {relative}')
+    if renders and not render_warnings:
+        report.append(f'  renders: {len(renders)} identical to the recorded SHA-256')
     for relative in undeclared:
         report.append(f'  FAIL: wrote an undeclared result: {relative}')
     if undeclared:

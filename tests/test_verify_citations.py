@@ -321,5 +321,79 @@ class TestBibliographyMetadata(unittest.TestCase):
             self.assertTrue(any("authors differ" in error for error in errors))
 
 
+class TestBibliographyLocators(unittest.TestCase):
+    """BibTeX volume, number, and pages must come from the registry's verified values."""
+
+    write_registry_and_bib = TestBibliographyMetadata.write_registry_and_bib
+    entry = TestBibliographyMetadata.entry
+
+    BIB_HEAD = (
+        "@article{smith2024boiler,\n"
+        "  title={Boiler Efficiency},\n"
+        "  author={Smith, Jane and Kim, Ji-Hoon},\n"
+        "  year={2024},\n"
+        "  journal={Applied Energy},\n"
+    )
+
+    def located_entry(self) -> dict:
+        entry = self.entry()
+        entry.update({"volume": "59", "issue": "9", "pages": "1713-1720"})
+        return entry
+
+    def bib(self, locators: str) -> str:
+        return self.BIB_HEAD + locators + "  doi={10.1234/example}\n}\n"
+
+    def test_matching_locators_pass_with_bibtex_page_range(self):
+        with TemporaryDirectory() as tmp:
+            registry, bib = self.write_registry_and_bib(
+                tmp,
+                self.located_entry(),
+                self.bib("  volume = {59},\n  number = {9},\n  pages = {1713--1720},\n"),
+            )
+            self.assertEqual(find_bibliography_metadata_mismatches(bib, registry), [])
+
+    def test_en_dash_and_spacing_are_normalised(self):
+        with TemporaryDirectory() as tmp:
+            registry, bib = self.write_registry_and_bib(
+                tmp,
+                self.located_entry(),
+                self.bib("  volume = {59},\n  number = {9},\n  pages = {1713 – 1720},\n"),
+            )
+            self.assertEqual(find_bibliography_metadata_mismatches(bib, registry), [])
+
+    def test_mismatched_locators_are_reported(self):
+        with TemporaryDirectory() as tmp:
+            registry, bib = self.write_registry_and_bib(
+                tmp,
+                self.located_entry(),
+                self.bib("  volume = {60},\n  number = {1},\n  pages = {1713--1721},\n"),
+            )
+            errors = find_bibliography_metadata_mismatches(bib, registry)
+            self.assertTrue(any("volume differs from registry volume" in error for error in errors))
+            self.assertTrue(any("number differs from registry issue" in error for error in errors))
+            self.assertTrue(any("pages differs from registry pages" in error for error in errors))
+
+    def test_locator_without_registry_value_is_invented(self):
+        with TemporaryDirectory() as tmp:
+            registry, bib = self.write_registry_and_bib(
+                tmp,
+                self.entry(),
+                self.bib("  volume = {59},\n  number = {9},\n  pages = {1--2},\n"),
+            )
+            errors = find_bibliography_metadata_mismatches(bib, registry)
+            self.assertEqual(len(errors), 3)
+            self.assertTrue(all("has no registry" in error for error in errors))
+
+    def test_registry_locator_missing_from_bibtex_is_incomplete(self):
+        with TemporaryDirectory() as tmp:
+            registry, bib = self.write_registry_and_bib(
+                tmp, self.located_entry(), self.bib("  volume = {59},\n")
+            )
+            errors = find_bibliography_metadata_mismatches(bib, registry)
+            self.assertTrue(any("BibTeX missing number" in error for error in errors))
+            self.assertTrue(any("BibTeX missing pages" in error for error in errors))
+            self.assertFalse(any("volume" in error for error in errors))
+
+
 if __name__ == "__main__":
     unittest.main()

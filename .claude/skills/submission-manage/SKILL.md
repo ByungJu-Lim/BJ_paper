@@ -37,8 +37,12 @@ submission tag to a new commit.
    differ, and a reused TIFF at the wrong width is a desk-reject.
    Rendered figures are generated artefacts — if one needs a change, change the
    script or the profile and re-render, never the exported file.
-5. Delegate the cover letter to `writer`, drawing the contribution from
-   `docs/notes/novelty-matrix.md`. If this is a resubmission, the letter must not
+5. Delegate the cover letter to `writer` (with `docs/notes/scientific-writing-rules.md`, user rule 2026-11-05; the cover-letter rule governs where they overlap), drawing the contribution from
+   `docs/notes/novelty-matrix.md`. Keep it short (about 300 words of body, one page) and centred on
+   why the paper is interesting and why it fits this journal; present only the key conclusions that make it
+   interesting (not all of them), with the minimum of method and numbers, each as a lesson in a sentence or two, add only what the venue requires
+   (e.g. a one-sentence length justification), and leave out what the manuscript or submission
+   system already carries (CLAUDE.md, cover-letter rule, user 2026-11-04). If this is a resubmission, the letter must not
    mention the earlier venue or its decision.
 6. Add an attempt block to the ledger with `status: preparing`.
 
@@ -55,6 +59,10 @@ submission tag to a new commit.
    python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --bib refs/references.bib
    python scripts/verify_story_brief.py --brief docs/notes/story-brief.md --registry docs/notes/retrieved-sources.json --sections docs/sections/*.md --state .omc/paper-state.md --check-manifests --require-slots all --require-coverage
    ```
+   `verify_source_registry --online` follows the source-change rule: re-run it only
+   when the registry or the bibliography changed since its last recorded pass, or
+   when that pass is more than 30 days old; otherwise record the last pass (commit
+   and date) in the freeze notes (CLAUDE.md, user rule 2026-11-04).
    The re-run is the slow one and the only one that answers "does this still
    reproduce". Run it on the frozen code, not on a working tree you are still
    editing; a venue that asks for a replication package is asking for exactly
@@ -119,6 +127,13 @@ submission tag to a new commit.
     open until this is set, which is deliberate.
 17. Stop for the **venue-change user gate**: the user chooses the next venue.
     Then open attempt `NN+1` from step 2.
+
+A venue change *before* anything was submitted is not a decision: close the
+`preparing` attempt as `status: abandoned`, with `submitted-on` and
+`manuscript-tag` left empty and `no-feedback-reason` saying why it was never
+submitted. Keep its folder as a record, pass the **venue-change user gate**, and
+open attempt `NN+1` from step 2. `check_submissions.py` accepts no other way to
+leave a `preparing` attempt behind.
 
 ## Hard rules
 

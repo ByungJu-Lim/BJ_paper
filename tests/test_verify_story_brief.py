@@ -134,6 +134,12 @@ class TestValidateClaims(unittest.TestCase):
         )
         self.assertTrue(any("requires at least one evidence" in error for error in errors))
 
+    def test_withdrawn_claim_needs_no_evidence_but_keeps_its_falsifier(self):
+        claim = {"id": "C1", "claim": "x", "status": "withdrawn", "basis": "prospective", "evidence": ""}
+        self.assertEqual(validate_claims(self.brief([claim], {"C1": "something measurable"})), [])
+        errors = validate_claims(self.brief([claim], {}))
+        self.assertTrue(any("no falsifier recorded" in error for error in errors))
+
     def test_supported_claim_requires_written_falsifier(self):
         errors = validate_claims(
             self.brief(
@@ -290,6 +296,23 @@ class TestValidateSections(unittest.TestCase):
             errors = validate_sections(self.brief({"C1": "assumed"}), [section], False)
             self.assertTrue(any("claims not in the brief: C7" in error for error in errors))
 
+    def test_superseded_claim_in_any_section_is_flagged_and_skipped_by_coverage(self):
+        with TemporaryDirectory() as tmp:
+            section = write_section(tmp, "05-results.md", "<!-- claims: C1 -->" + chr(10) + chr(10) + "Text." + chr(10))
+            errors = validate_sections(self.brief({"C1": "superseded", "C2": "supported"}), [section], True)
+            self.assertTrue(any("carries superseded claims: C1" in error for error in errors))
+            self.assertTrue(any("no section carries C2" in error for error in errors))
+            self.assertFalse(any("no section carries C1" in error for error in errors))
+
+    def test_withdrawn_claim_in_any_section_is_flagged_and_skipped_by_coverage(self):
+        with TemporaryDirectory() as tmp:
+            section = write_section(tmp, "05-results.md", "<!-- claims: C2 -->" + chr(10) + chr(10) + "Text." + chr(10))
+            errors = validate_sections(self.brief({"C1": "withdrawn", "C2": "supported"}), [section], True)
+            self.assertFalse(any("C1" in error for error in errors))
+            other = write_section(tmp, "06-results.md", "<!-- claims: C1 -->" + chr(10) + chr(10) + "Text." + chr(10))
+            errors = validate_sections(self.brief({"C1": "withdrawn"}), [other], False)
+            self.assertTrue(any("carries withdrawn claims: C1" in error for error in errors))
+
     def test_refuted_claim_in_any_section_is_flagged(self):
         with TemporaryDirectory() as tmp:
             section = write_section(tmp, "01-introduction.md", "<!-- claims: C1 -->\n")
@@ -327,9 +350,17 @@ class TestValidateSections(unittest.TestCase):
 
 class TestValidateAll(unittest.TestCase):
     def test_shipped_template_passes_the_structural_check(self):
-        errors = validate_all(
-            Path("docs/notes/story-brief.md"), [], [], None, Path("data/processed"), False
+        # The shipped template: every slot and the one starter claim and falsifier are still placeholders.
+        # Built here, not read from docs/notes/story-brief.md, which holds the live paper's content.
+        placeholder = "_입력 필요_"
+        template = brief_text(
+            narrative="| Slot | Sentence |\n|---|---|\n"
+            + "".join("| %s | %s |\n" % (slot, placeholder) for slot in ALL_SLOTS),
+            claims="| C1 | %s | assumed | prospective | |\n" % placeholder,
+            falsifiers="- **C1:** %s\n" % placeholder,
         )
+        with TemporaryDirectory() as tmp:
+            errors = validate_all(write_brief(tmp, template), [], [], None, Path(tmp), False)
         self.assertEqual(errors, [])
 
     def test_end_to_end_failure_collects_errors_from_every_check(self):

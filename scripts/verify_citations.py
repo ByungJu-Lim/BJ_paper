@@ -16,11 +16,11 @@ from pathlib import Path
 
 try:
     from .validation_common import expand_paths, visible_markdown
-    from .verify_source_registry import author_names
+    from .verify_source_registry import author_names, normalize_locator
     from .check_paper_state import parse_stages, validate_all as validate_state
 except ImportError:  # pragma: no cover - script execution path
     from validation_common import expand_paths, visible_markdown
-    from verify_source_registry import author_names
+    from verify_source_registry import author_names, normalize_locator
     from check_paper_state import parse_stages, validate_all as validate_state
 
 DEFAULT_BIB_PATH = Path("refs/references.bib")
@@ -30,6 +30,8 @@ BIB_FIELD_RE = re.compile(
     r"([A-Za-z][A-Za-z0-9_-]*)\s*=\s*(\{(?:[^{}]|\{[^{}]*\})*\}|\"[^\"]*\"|[^,\n]+)",
     re.DOTALL,
 )
+# BibTeX locator field -> registry field that must back it.
+BIB_LOCATOR_FIELDS = {"volume": "volume", "number": "issue", "pages": "pages"}
 
 
 def extract_registry_keys(registry_path: Path) -> set[str]:
@@ -192,6 +194,25 @@ def find_bibliography_metadata_mismatches(bib_path: Path, registry_path: Path) -
         bib_authors = author_names(re.split(r"\s+and\s+", bib.get("author", "")))
         if bib_authors and registry_authors and bib_authors != registry_authors:
             errors.append(f"{key}: BibTeX authors differ from registry authors")
+
+        for bib_field, registry_field in BIB_LOCATOR_FIELDS.items():
+            bib_value = bib.get(bib_field, "")
+            registry_value = entry.get(registry_field)
+            if not isinstance(registry_value, str) or not registry_value.strip():
+                if bib_value:
+                    errors.append(
+                        f"{key}: BibTeX {bib_field} has no registry {registry_field} "
+                        "to back it (unverified field)"
+                    )
+            elif not bib_value:
+                errors.append(
+                    f"{key}: BibTeX missing {bib_field} (registry {registry_field} is "
+                    f"'{registry_value}')"
+                )
+            elif normalize_locator(bib_value) != normalize_locator(registry_value):
+                errors.append(
+                    f"{key}: BibTeX {bib_field} differs from registry {registry_field}"
+                )
 
     return errors
 

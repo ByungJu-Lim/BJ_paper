@@ -1,6 +1,8 @@
 import io
 import json
+import os
 import unittest
+from contextlib import redirect_stderr
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -498,6 +500,471 @@ class TestOnlineBibliographicMetadata(RegistryTestCase):
             self.assertTrue(any("authors do not match" in error for error in errors))
             self.assertTrue(any("year does not match" in error for error in errors))
             self.assertTrue(any("venue does not match" in error for error in errors))
+
+
+class TestLocatorMetadata(RegistryTestCase):
+    """Optional volume, issue, and pages must match Crossref before they reach the bib."""
+
+    ENTRY = TestOnlineBibliographicMetadata.ENTRY
+
+    def entry(self, **locators) -> dict:
+        entry = dict(self.ENTRY)
+        entry.update(locators)
+        return entry
+
+    def crossref(self, **locators):
+        def fetch(doi: str) -> dict:
+            metadata = {
+                "DOI": doi,
+                "title": ["Boiler Efficiency"],
+                "author": [
+                    {"given": "Jane", "family": "Smith"},
+                    {"given": "Ji-Hoon", "family": "Kim"},
+                ],
+                "published-print": {"date-parts": [[2024]]},
+                "container-title": ["Applied Energy"],
+            }
+            metadata.update(locators)
+            return metadata
+        return fetch
+
+    def test_non_string_or_blank_locators_are_rejected_offline(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry(volume=12, issue="  ", pages=None)])
+            errors = validate_registry(path)
+            self.assertTrue(any("volume must be a non-empty string" in error for error in errors))
+            self.assertTrue(any("issue must be a non-empty string" in error for error in errors))
+            self.assertTrue(any("pages must be a non-empty string" in error for error in errors))
+
+    def test_locators_are_optional(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry()])
+            errors = self.validate(path, fetch_crossref=self.crossref(volume="12", page="1-9"))
+            self.assertEqual(errors, [])
+
+    def test_matching_locators_pass_regardless_of_dash_style(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(
+                tmp, [self.entry(volume="59", issue="9", pages="1713--1720")]
+            )
+            errors = self.validate(
+                path, fetch_crossref=self.crossref(volume="59", issue="9", page="1713–1720")
+            )
+            self.assertEqual(errors, [])
+
+    def test_pages_may_match_the_crossref_article_number(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry(volume="12", issue="4", pages="044501")])
+            errors = self.validate(
+                path,
+                fetch_crossref=self.crossref(volume="12", issue="4", **{"article-number": "044501"}),
+            )
+            self.assertEqual(errors, [])
+
+    def test_mismatched_locators_are_reported(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry(volume="60", issue="2", pages="1-10")])
+            errors = self.validate(
+                path,
+                fetch_crossref=self.crossref(
+                    volume="59", issue="9", page="1713-1720", **{"article-number": "e1"}
+                ),
+            )
+            self.assertTrue(any("volume '60' does not match Crossref" in error for error in errors))
+            self.assertTrue(any("issue '2' does not match Crossref" in error for error in errors))
+            self.assertTrue(any("pages '1-10' does not match Crossref" in error for error in errors))
+
+    def test_locator_absent_from_crossref_is_reported(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [self.entry(volume="12", issue="4", pages="7")])
+            errors = self.validate(path, fetch_crossref=self.crossref(volume="12"))
+            self.assertTrue(any("issue '4' is not in Crossref metadata" in error for error in errors))
+            self.assertTrue(any("pages '7' is not in Crossref metadata" in error for error in errors))
+            self.assertFalse(any("volume" in error for error in errors))
+
+    def test_datacite_resolved_doi_skips_locator_comparison(self):
+        with TemporaryDirectory() as tmp:
+            path = self.write_registry(tmp, [{
+                "key": "vaswani2017attention",
+                "title": "Attention Is All You Need",
+                "url": "https://arxiv.org/abs/1706.03762",
+                "doi": "10.48550/arXiv.1706.03762",
+                "retrieved_at": "2026-09-05",
+                "source_type": "preprint",
+                "access": "full-text",
+                "authors": ["Ashish Vaswani"],
+                "year": 2017,
+                "venue": "arXiv",
+                "volume": "1",
+                "pages": "1-15",
+            }])
+
+            def crossref_404(doi: str) -> dict:
+                raise http_error(404)
+
+            errors = self.validate(
+                path,
+                fetch_crossref=crossref_404,
+                fetch_datacite=lambda doi: {"DOI": doi, "title": ["Attention Is All You Need"], "creators": [{"name": "Vaswani, Ashish"}], "publicationYear": 2017, "publisher": "arXiv"},
+            )
+            self.assertEqual(errors, [])
+
+
+class TestMetadataException(RegistryTestCase):
+    """A documented, auditable way past a defective agency author record - and nothing else."""
+
+    PDF = "docs/sources/smith2024boiler.pdf"
+
+    def entry(self, **overrides) -> dict:
+        base = {
+            "key": "smith2024boiler",
+            "title": "Boiler Efficiency",
+            "url": "https://doi.org/10.1234/example",
+            "doi": "10.1234/example",
+            "retrieved_at": "2026-09-05",
+            "source_type": "journal-article",
+            "access": "full-text",
+            "authors": ["Jane Smith", "Ji-Hoon Kim"],
+            "year": 2024,
+            "venue": "Applied Energy",
+            "local_file": self.PDF,
+            "metadata_exception": {
+                "fields": ["authors"],
+                "reason": "Crossref lists only the first author; the PDF lists two",
+                "evidence": f"{self.PDF}#page=1",
+            },
+        }
+        base.update(overrides)
+        return base
+
+    def exception(self, **overrides) -> dict:
+        value = dict(self.entry()["metadata_exception"])
+        value.update(overrides)
+        return value
+
+    def metadata(self, doi: str, **overrides) -> dict:
+        record = {
+            "DOI": doi,
+            "title": ["Boiler Efficiency"],
+            "author": [{"given": "J", "family": "SMITH"}],
+            "published-print": {"date-parts": [[2024]]},
+            "container-title": ["Applied Energy"],
+        }
+        record.update(overrides)
+        return record
+
+    def setup_repo(self, tmp: str, entries: list[dict]) -> Path:
+        pdf = Path(tmp) / self.PDF
+        pdf.parent.mkdir(parents=True, exist_ok=True)
+        pdf.write_bytes(b"%PDF-1.4")
+        return self.write_registry(tmp, entries)
+
+    def test_author_exception_passes_with_a_visible_warning(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            warnings: list[str] = []
+            errors = self.validate(
+                path, root=Path(tmp), warnings=warnings, fetch_crossref=self.metadata
+            )
+            self.assertEqual(errors, [])
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("smith2024boiler", warnings[0])
+            self.assertIn("SKIPPED", warnings[0])
+            self.assertIn("Crossref lists only the first author", warnings[0])
+            self.assertIn(f"{self.PDF}#page=1", warnings[0])
+
+    def test_author_exception_covers_agency_record_without_authors(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            warnings: list[str] = []
+            errors = self.validate(
+                path,
+                root=Path(tmp),
+                warnings=warnings,
+                fetch_crossref=lambda doi: self.metadata(doi, author=[]),
+            )
+            self.assertEqual(errors, [])
+            self.assertIn("lists: (none)", warnings[0])
+
+    def test_warning_goes_to_stderr_when_no_list_is_given(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                errors = self.validate(path, root=Path(tmp), fetch_crossref=self.metadata)
+            self.assertEqual(errors, [])
+            self.assertIn("WARNING: entry 'smith2024boiler'", stderr.getvalue())
+
+    def test_url_evidence_is_accepted_without_a_local_file(self):
+        with TemporaryDirectory() as tmp:
+            entry = self.entry(
+                access="abstract-only",
+                metadata_exception=self.exception(evidence="https://www.osti.gov/biblio/1"),
+            )
+            del entry["local_file"]
+            path = self.write_registry(tmp, [entry])
+            warnings: list[str] = []
+            errors = self.validate(
+                path, root=Path(tmp), warnings=warnings, fetch_crossref=self.metadata
+            )
+            self.assertEqual(errors, [])
+            self.assertEqual(len(warnings), 1)
+
+    def test_unneeded_exception_is_flagged_in_a_warning(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            warnings: list[str] = []
+            errors = self.validate(
+                path,
+                root=Path(tmp),
+                warnings=warnings,
+                fetch_crossref=lambda doi: self.metadata(doi, author=[
+                    {"given": "Jane", "family": "Smith"},
+                    {"given": "Ji-Hoon", "family": "Kim"},
+                ]),
+            )
+            self.assertEqual(errors, [])
+            self.assertIn("no longer needed", warnings[0])
+
+    def test_exception_on_a_non_author_field_is_rejected(self):
+        for field in ("title", "year", "venue", "doi"):
+            with self.subTest(field=field), TemporaryDirectory() as tmp:
+                path = self.setup_repo(
+                    tmp, [self.entry(metadata_exception=self.exception(fields=["authors", field]))]
+                )
+                errors = validate_registry(path, root=Path(tmp))
+                self.assertTrue(any("cannot be excepted" in error for error in errors))
+
+    def test_rejected_exception_excuses_nothing_online(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(
+                tmp, [self.entry(metadata_exception=self.exception(fields=["title"]))]
+            )
+            warnings: list[str] = []
+            errors = self.validate(
+                path, root=Path(tmp), warnings=warnings, fetch_crossref=self.metadata
+            )
+            self.assertTrue(any("cannot be excepted" in error for error in errors))
+            self.assertTrue(any("authors do not match" in error for error in errors))
+            self.assertEqual(warnings, [])
+
+    def test_missing_or_invalid_evidence_is_rejected(self):
+        not_local = "must point at this entry's local_file"
+        cases = {
+            "missing": ({"evidence": None}, "evidence must be a non-empty string"),
+            "blank": ({"evidence": "  "}, "evidence must be a non-empty string"),
+            "no page": ({"evidence": self.PDF}, "#page=<N>"),
+            "page zero": ({"evidence": f"{self.PDF}#page=0"}, "#page=<N>"),
+            "other file": ({"evidence": "docs/sources/other.pdf#page=1"}, not_local),
+            "trailing space": ({"evidence": f"{self.PDF} #page=1"}, not_local),
+            "url despite local file": ({"evidence": "https://example.org/paper.pdf"}, "#page=<N>"),
+        }
+        for name, (override, message) in cases.items():
+            with self.subTest(case=name), TemporaryDirectory() as tmp:
+                exception = self.exception(**override)
+                if exception["evidence"] is None:
+                    del exception["evidence"]
+                path = self.setup_repo(tmp, [self.entry(metadata_exception=exception)])
+                (Path(tmp) / "docs/sources/other.pdf").write_bytes(b"%PDF-1.4")
+                errors = validate_registry(path, root=Path(tmp))
+                self.assertTrue(
+                    any(message in error and "metadata_exception" in error for error in errors),
+                    errors,
+                )
+
+    def test_evidence_file_must_exist(self):
+        with TemporaryDirectory() as tmp:
+            # local_file and evidence agree, but neither file was created.
+            path = self.write_registry(tmp, [self.entry()])
+            errors = validate_registry(path, root=Path(tmp))
+            self.assertTrue(
+                any("evidence file" in error and "does not exist" in error for error in errors),
+                errors,
+            )
+
+    def test_evidence_outside_the_repository_is_rejected(self):
+        with TemporaryDirectory() as outside_dir, TemporaryDirectory() as tmp:
+            outside = Path(outside_dir) / "outside.pdf"
+            outside.write_bytes(b"%PDF-1.4")
+            relative = Path(os.path.relpath(outside, Path(tmp).resolve())).as_posix()
+            self.assertTrue(relative.startswith(".."), relative)
+            for name, evidence in {
+                "relative": f"{relative}#page=1",
+                "absolute": f"{outside.resolve().as_posix()}#page=1",
+            }.items():
+                with self.subTest(case=name):
+                    path = self.setup_repo(
+                        tmp, [self.entry(metadata_exception=self.exception(evidence=evidence))]
+                    )
+                    errors = validate_registry(path, root=Path(tmp))
+                    self.assertTrue(
+                        any(
+                            "metadata_exception.evidence must stay inside" in error
+                            for error in errors
+                        ),
+                        errors,
+                    )
+
+    def test_evidence_must_be_the_entry_local_file_not_another_repo_file(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            other = Path(tmp) / "docs/sources/other.pdf"
+            other.write_bytes(b"%PDF-1.4")
+            registry = json.loads(path.read_text(encoding="utf-8"))
+            registry[0]["metadata_exception"]["evidence"] = "docs/sources/other.pdf#page=1"
+            path.write_text(json.dumps(registry), encoding="utf-8")
+            errors = validate_registry(path, root=Path(tmp))
+            self.assertTrue(
+                any("must point at this entry's local_file" in error for error in errors), errors
+            )
+
+    def test_invalid_exception_never_excuses_the_author_check_online(self):
+        not_local = "must point at this entry's local_file"
+        cases = {
+            "missing page": ({"evidence": self.PDF}, True, "#page=<N>"),
+            "nonexistent file": ({}, False, "does not exist"),
+            "blank reason": ({"reason": " "}, True, "reason must say why"),
+            "unknown key": ({"note": "extra"}, True, "unknown keys"),
+            "other file": ({"evidence": "docs/sources/other.pdf#page=1"}, True, not_local),
+            "trailing space": ({"evidence": f"{self.PDF} #page=1"}, True, not_local),
+        }
+        for name, (override, create_pdf, message) in cases.items():
+            with self.subTest(case=name), TemporaryDirectory() as tmp:
+                exception = self.exception(**override)
+                entries = [self.entry(metadata_exception=exception)]
+                path = (
+                    self.setup_repo(tmp, entries)
+                    if create_pdf
+                    else self.write_registry(tmp, entries)
+                )
+                (Path(tmp) / "docs/sources").mkdir(parents=True, exist_ok=True)
+                (Path(tmp) / "docs/sources/other.pdf").write_bytes(b"%PDF-1.4")
+                warnings: list[str] = []
+                errors = self.validate(
+                    path, root=Path(tmp), warnings=warnings, fetch_crossref=self.metadata
+                )
+                self.assertTrue(any(message in error for error in errors), errors)
+                self.assertTrue(any("authors do not match" in error for error in errors), errors)
+                self.assertEqual(warnings, [])
+
+    def test_invalid_exception_does_not_excuse_missing_agency_authors_online(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(
+                tmp, [self.entry(metadata_exception=self.exception(evidence=self.PDF))]
+            )
+            warnings: list[str] = []
+            errors = self.validate(
+                path,
+                root=Path(tmp),
+                warnings=warnings,
+                fetch_crossref=lambda doi: self.metadata(doi, author=[]),
+            )
+            self.assertTrue(any("authors missing from" in error for error in errors), errors)
+            self.assertEqual(warnings, [])
+
+    def test_agency_and_doi_resolver_urls_are_rejected_as_evidence(self):
+        for url in (
+            "https://api.crossref.org/works/10.1234/example",
+            "https://search.crossref.org/?q=10.1234%2Fexample",
+            "https://data.crossref.org/10.1234/example",
+            "https://api.datacite.org/dois/10.1234/example",
+            "https://doi.org/10.1234/example",
+            "http://dx.doi.org/10.1234/example",
+            "https://API.Crossref.org/works/10.1234/example",
+        ):
+            with self.subTest(url=url), TemporaryDirectory() as tmp:
+                entry = self.entry(
+                    access="abstract-only", metadata_exception=self.exception(evidence=url)
+                )
+                del entry["local_file"]
+                path = self.write_registry(tmp, [entry])
+                errors = validate_registry(path, root=Path(tmp))
+                self.assertTrue(
+                    any("agency or DOI-resolver URL" in error for error in errors), errors
+                )
+
+    def test_entry_without_local_file_needs_url_evidence(self):
+        with TemporaryDirectory() as tmp:
+            entry = self.entry(access="abstract-only")
+            del entry["local_file"]
+            path = self.setup_repo(tmp, [entry])
+            errors = validate_registry(path, root=Path(tmp))
+            self.assertTrue(any("http(s) URL" in error for error in errors))
+
+    def test_exception_shape_is_checked_offline(self):
+        cases = {
+            "not an object": "authors",
+            "unknown key": self.exception(note="extra"),
+            "blank reason": self.exception(reason=" "),
+            "empty fields": self.exception(fields=[]),
+        }
+        for name, exception in cases.items():
+            with self.subTest(case=name), TemporaryDirectory() as tmp:
+                path = self.setup_repo(tmp, [self.entry(metadata_exception=exception)])
+                errors = validate_registry(path, root=Path(tmp))
+                self.assertTrue(any("metadata_exception" in error for error in errors), errors)
+
+    def test_exception_requires_a_doi(self):
+        with TemporaryDirectory() as tmp:
+            entry = self.entry(source_type="report")
+            del entry["doi"]
+            path = self.setup_repo(tmp, [entry])
+            errors = validate_registry(path, root=Path(tmp))
+            self.assertTrue(any("only applies to entries with a DOI" in error for error in errors))
+
+    def test_title_mismatch_still_fails_with_an_exception(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            errors = self.validate(
+                path,
+                root=Path(tmp),
+                warnings=[],
+                fetch_crossref=lambda doi: self.metadata(doi, title=["Something else entirely"]),
+            )
+            self.assertTrue(any("title does not match" in error for error in errors))
+
+    def test_year_and_venue_mismatch_still_fail_with_an_exception(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            errors = self.validate(
+                path,
+                root=Path(tmp),
+                warnings=[],
+                fetch_crossref=lambda doi: self.metadata(
+                    doi,
+                    **{"published-print": {"date-parts": [[2019]]},
+                       "container-title": ["Invented Journal"]},
+                ),
+            )
+            self.assertTrue(any("year does not match" in error for error in errors))
+            self.assertTrue(any("venue does not match" in error for error in errors))
+
+    def test_unresolvable_doi_still_fails_with_an_exception(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+
+            def not_found(doi: str) -> dict:
+                raise http_error(404)
+
+            errors = self.validate(
+                path, root=Path(tmp), warnings=[],
+                fetch_crossref=not_found, fetch_datacite=not_found,
+            )
+            self.assertTrue(any("DOI not found" in error for error in errors))
+
+    def test_retraction_still_blocks_with_an_exception(self):
+        with TemporaryDirectory() as tmp:
+            path = self.setup_repo(tmp, [self.entry()])
+            errors = self.validate(
+                path,
+                root=Path(tmp),
+                warnings=[],
+                fetch_crossref=self.metadata,
+                fetch_updates=lambda doi: [
+                    {"type": "retraction", "notice_doi": "10.1234/notice", "source": "retraction-watch"}
+                ],
+            )
+            self.assertTrue(any("flagged as retraction" in error for error in errors))
 
 
 if __name__ == "__main__":

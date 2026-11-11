@@ -10,3 +10,14 @@ __pycache__/
 !.env.example
 docs/sources/*
 !docs/sources/README.md
+
+# Word lock files left by an open .docx
+**/~$*
+
+# Internal JCR spreadsheet used for venue selection (external distribution prohibited)
+refs/*.xlsx
+
+# Operational run records and per-directory hook state
+.hermes/
+**/.omc/state/
+.claude/worktrees/

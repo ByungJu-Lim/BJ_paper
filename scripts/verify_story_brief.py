@@ -36,7 +36,10 @@ DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_OUTLINE_PATH = Path("docs/outline.md")
 
 NARRATIVE_SLOTS = ("Context", "Gap", "Question", "Approach", "Finding", "Implication")
-CLAIM_STATUSES = ("assumed", "supported", "refuted")
+CLAIM_STATUSES = ("assumed", "supported", "refuted", "superseded", "withdrawn")
+# withdrawn: a registered claim that was never tested (e.g. a run dropped by a user
+# scope decision). It needs no evidence, keeps its falsifier, may not be declared by
+# any section and is exempt from final coverage. Returning it to assumed reopens it.
 CLAIM_BASES = ("prospective", "retrospective")
 
 NARRATIVE_HEADER_RE = re.compile(r"^\|\s*Slot\s*\|\s*Sentence\s*\|$", re.IGNORECASE)
@@ -163,7 +166,7 @@ def validate_claims(brief: dict) -> list[str]:
             )
 
         basis = claim.get("basis", "")
-        if not is_placeholder(claim["claim"]) or status in {"supported", "refuted"}:
+        if not is_placeholder(claim["claim"]) or status in {"supported", "refuted", "superseded"}:
             if basis not in CLAIM_BASES:
                 errors.append(
                     f"{claim_id}: invalid basis '{basis}', "
@@ -171,13 +174,13 @@ def validate_claims(brief: dict) -> list[str]:
                 )
 
         evidence = parse_evidence(claim["evidence"])
-        if status in {"supported", "refuted"} and not evidence:
+        if status in {"supported", "refuted", "superseded"} and not evidence:
             errors.append(f"{claim_id}: status '{status}' requires at least one evidence entry")
 
         falsifier = brief["falsifiers"].get(claim_id)
         if falsifier is None:
             errors.append(f"{claim_id}: no falsifier recorded")
-        elif (status in {"supported", "refuted"} or not is_placeholder(claim["claim"])) and is_placeholder(falsifier):
+        elif (status in {"supported", "refuted", "superseded"} or not is_placeholder(claim["claim"])) and is_placeholder(falsifier):
             errors.append(f"{claim_id}: status '{status}' requires a written falsifier")
 
     unknown_falsifiers = sorted(set(brief["falsifiers"]) - seen)
@@ -366,6 +369,12 @@ def validate_sections(brief: dict, section_paths: list[Path], require_coverage: 
         refuted = sorted(cid for cid in declared if status_by_id.get(cid) == "refuted")
         if refuted:
             errors.append(f"{section_path}: carries refuted claims: {', '.join(refuted)}")
+        superseded = sorted(cid for cid in declared if status_by_id.get(cid) == "superseded")
+        if superseded:
+            errors.append(f"{section_path}: carries superseded claims: {', '.join(superseded)}")
+        withdrawn = sorted(cid for cid in declared if status_by_id.get(cid) == "withdrawn")
+        if withdrawn:
+            errors.append(f"{section_path}: carries withdrawn claims: {', '.join(withdrawn)}")
 
         if is_concluding_section(section_path, outline_roles):
             assumed = sorted(cid for cid in declared if status_by_id.get(cid) == "assumed")
@@ -378,7 +387,7 @@ def validate_sections(brief: dict, section_paths: list[Path], require_coverage: 
         uncovered = sorted(
             claim_id
             for claim_id, status in status_by_id.items()
-            if status != "refuted" and claim_id not in covered
+            if status not in {"refuted", "superseded", "withdrawn"} and claim_id not in covered
         )
         if uncovered:
             errors.append(f"coverage: no section carries {', '.join(uncovered)}")

@@ -8,7 +8,7 @@ description: Generates figures and tables from processed experiment data. Use on
 ## Procedure
 
 1. Delegate to `executor`: write a plotting/table-generation script under `code/` that reads from `data/processed/` and writes working images to `figures/*.png`. These are the venue-neutral renders used while drafting.
-2. Take every render setting the venue controls — output format, DPI, figure width, colour mode, font — as **parameters of that script**, never as values hard-coded inside it. Journals differ on all of them, and a script that can only emit one variant has to be rewritten at every venue change.
+2. Take every render setting the venue controls — output format, DPI, figure width, colour mode, font — as **parameters of that script**, never as values hard-coded inside it. Journals differ on all of them, and a script that can only emit one variant has to be rewritten at every venue change. The script's defaults implement the user's figure rules in `CLAUDE.md` (2026-10-08, 2026-10-11): Times New Roman for every label (mathtext included), gridlines, all four axis spines drawn, graph text at least 9 pt, short captions. A venue profile may override them; nothing else does.
 3. Embed tables as Markdown tables (header, separator, data rows) and images as local Markdown links in the section. Put `Table 1: Description` immediately above the table or `Fig. 1: Description` immediately above `![Description](../../figures/fig1.png)`. Caption numbers must be unique by kind across sections. The story validator resolves evidence to these captions and files; a prose mention alone is not evidence.
 4. Hand off to `critic` through the `paper-supervise` loop, using the rubric below.
 
@@ -33,7 +33,7 @@ principles of graphical integrity and data density.
 
 | Check | Failure it catches |
 |---|---|
-| Every mark carries information; gridlines, borders, shadows, and backgrounds that carry none are removed | Decoration competing with data |
+| Every mark carries information; shadows, backgrounds, and effects that carry none are removed. Light gridlines and the closed four-sided frame are the house style (`CLAUDE.md` figure rule), kept behind the data | Decoration competing with data |
 | Repeated comparisons use small multiples with a shared scale rather than one crowded overlay | Six series in one panel is a legend, not a figure |
 | The reader can find the intended comparison without decoding a legend across the plot | Colour-only encodings that fail in greyscale and for colour-blind readers |
 | Table columns are ordered and aligned so the comparison being claimed reads down a column | A table nobody can read is a table nobody checks |
@@ -44,7 +44,7 @@ principles of graphical integrity and data density.
 | Check | Failure it catches |
 |---|---|
 | Every number in a table appears in the processed data, traced to its run manifest | A number that drifted during a redraw |
-| The caption states what the figure shows, not what the authors conclude from it | Conclusions smuggled into captions |
+| The caption is a short title of what the figure shows; description and conclusions go in the prose (`CLAUDE.md` format rule 2026-10-11) | Conclusions smuggled into captions |
 | The claim the section declares is the claim the figure actually supports | A figure carried over from a superseded claim |
 | Nothing is plotted that no section references, and nothing referenced is missing | Orphaned figures and dangling `Fig. N` |
 
@@ -61,7 +61,8 @@ Venue-specific figures are produced by `submission-manage`, not here, and they a
   "dpi": 300,
   "column_width_mm": { "single": 90, "double": 190 },
   "color_mode": "cmyk",
-  "min_font_pt": 7,
+  "font_family": "Times New Roman",
+  "min_font_pt": 9,
   "main_figures": ["fig1", "fig2"],
   "supplementary_figures": ["figS1"]
 }

@@ -26,6 +26,9 @@ TEMPLATE_NOTES = {
     "novelty-matrix.md",
     "retrieved-sources.json",
     "pipeline-findings.md",
+    # A standing user rule (CLAUDE.md, 2026-11-05), not a topic note: every paper
+    # writes under it, so a reset must not take it away from the next one.
+    "scientific-writing-rules.md",
 }
 
 SECTION_STUBS_DIR = "docs/sections"  # directory cleared by clear_sections_directory()

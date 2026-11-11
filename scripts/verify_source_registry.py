@@ -6,11 +6,21 @@ Verification layers, in order:
                  for DOIs registered there (arXiv preprints, Zenodo datasets).
 3. Integrity   - the resolved title must match, and the work must not be retracted
                  or under an expression of concern.
+
+A registry entry may carry a ``metadata_exception`` when the agency record itself
+is wrong about the authors (missing, truncated, or mixed with organisation names).
+It names only the ``authors`` field, says why the agency record is wrong, and points
+at evidence: a file inside the repository with a page (``<path>#page=<N>``) when the
+entry has a ``local_file``, otherwise an http(s) URL of the authoritative record.
+The exception skips only the author comparison and prints a WARNING each time it is
+used; DOI resolution, title, year, venue, and retraction screening still run.
 """
 import argparse
 import html
 import json
+import os
 import re
+import sys
 import time
 from datetime import date
 from difflib import SequenceMatcher
@@ -57,7 +67,27 @@ RETRACTION_TITLE_RE = re.compile(
     r"^\s*(?:retracted|withdrawn|retraction)\s*[:—–-]\s*", re.IGNORECASE
 )
 TITLE_SIMILARITY_THRESHOLD = 0.9
+# Fields a metadata_exception may excuse from the online comparison. Title, year,
+# venue, DOI, and retraction status are never excusable.
+EXCEPTABLE_FIELDS = {"authors"}
+METADATA_EXCEPTION_KEYS = {"fields", "reason", "evidence"}
+EVIDENCE_PAGE_RE = re.compile(r"^(?P<path>.+)#page=(?P<page>[1-9]\d*)$")
+# Hosts that serve the agency record being excepted (or redirect to a publisher page
+# that echoes it) cannot back an exception; evidence must be the final authoritative page.
+AGENCY_EVIDENCE_HOSTS = (
+    "api.crossref.org",
+    "search.crossref.org",
+    "data.crossref.org",
+    "api.datacite.org",
+    "doi.org",
+    "dx.doi.org",
+)
 USER_AGENT = "paper-agent-source-verifier/2.0"
+# Optional locator fields a venue needs for a complete reference. Each must be checked
+# against Crossref before it may appear in the bibliography.
+LOCATOR_FIELDS = ("volume", "issue", "pages")
+# Hyphen, the Unicode dash family, the minus sign, and BibTeX's "--" all mean a range.
+PAGE_RANGE_DASH_RE = re.compile(r"\s*(?:--|[‐-―−-])\s*")
 
 
 def normalize_doi(value: str) -> str:
@@ -73,6 +103,12 @@ def normalize_title(value: str) -> str:
 
 def normalize_update_type(value: str) -> str:
     return re.sub(r"[\s_-]+", "_", value.strip().casefold())
+
+
+def normalize_locator(value: str) -> str:
+    """Compare volume, issue, and page values regardless of dash style and spacing,
+    so "1713-1720", "1713–1720", and "1713 -- 1720" are the same range."""
+    return PAGE_RANGE_DASH_RE.sub("-", " ".join(value.split())).casefold()
 
 
 def normalize_author_name(value: str) -> str:
@@ -275,12 +311,34 @@ def _check_metadata(label: str, title: str, doi: str, metadata: dict, agency: st
     return errors
 
 
-def _check_bibliographic_metadata(label: str, entry: dict, metadata: dict, agency: str) -> list[str]:
+def _check_bibliographic_metadata(
+    label: str,
+    entry: dict,
+    metadata: dict,
+    agency: str,
+    excepted_fields: set[str] | frozenset[str] = frozenset(),
+    warn: Callable[[str], None] | None = None,
+) -> list[str]:
     errors: list[str] = []
 
     expected_authors = author_names(entry.get("authors"))
     resolved_authors = author_names(_metadata_authors(metadata))
-    if expected_authors and not resolved_authors:
+    if "authors" in excepted_fields:
+        exception = entry["metadata_exception"]
+        if warn is not None:
+            if expected_authors == resolved_authors:
+                warn(
+                    f"{label}: metadata_exception on authors is no longer needed - "
+                    f"{agency} authors now match; remove the exception"
+                )
+            else:
+                listed = "; ".join(_metadata_authors(metadata)) or "(none)"
+                warn(
+                    f"{label}: author check against {agency} SKIPPED by metadata_exception "
+                    f"(reason: {exception['reason'].strip()}; evidence: "
+                    f"{exception['evidence'].strip()}; {agency} lists: {listed})"
+                )
+    elif expected_authors and not resolved_authors:
         errors.append(f"{label}: authors missing from {agency} metadata; verify authoritative metadata before citing")
     elif expected_authors != resolved_authors:
         errors.append(f"{label}: authors do not match {agency} metadata")
@@ -304,6 +362,41 @@ def _check_bibliographic_metadata(label: str, entry: dict, metadata: dict, agenc
     ):
         errors.append(f"{label}: venue does not match {agency} metadata")
 
+    return errors
+
+
+def _check_locator_metadata(label: str, entry: dict, metadata: dict, agency: str) -> list[str]:
+    """Compare optional volume, issue, and pages against the Crossref record.
+
+    Crossref puts a page range in ``page`` and an article number (common for
+    Elsevier, MDPI, and ASME journals) in ``article-number``; either may back
+    the registry ``pages`` value.
+    """
+    errors: list[str] = []
+    crossref_fields = {
+        "volume": ("volume",),
+        "issue": ("issue",),
+        "pages": ("page", "article-number"),
+    }
+    for field in LOCATOR_FIELDS:
+        expected = entry.get(field)
+        if not isinstance(expected, str) or not expected.strip():
+            continue
+        resolved = [
+            str(metadata[name]).strip()
+            for name in crossref_fields[field]
+            if isinstance(metadata.get(name), (str, int)) and str(metadata[name]).strip()
+        ]
+        if not resolved:
+            errors.append(
+                f"{label}: {field} '{expected}' is not in {agency} metadata; "
+                "remove it or verify authoritative metadata before citing"
+            )
+        elif normalize_locator(expected) not in {normalize_locator(value) for value in resolved}:
+            errors.append(
+                f"{label}: {field} '{expected}' does not match {agency} metadata "
+                f"({' / '.join(resolved)})"
+            )
     return errors
 
 
@@ -342,6 +435,96 @@ def validate_access(label: str, entry: dict, root: Path) -> list[str]:
     return errors
 
 
+def validate_metadata_exception(label: str, entry: dict, root: Path) -> list[str]:
+    """Check the shape of an optional metadata_exception (offline, structural)."""
+    if "metadata_exception" not in entry:
+        return []
+    exception = entry["metadata_exception"]
+    prefix = f"{label}: metadata_exception"
+    if not isinstance(exception, dict):
+        return [f"{prefix} must be an object with fields, reason, and evidence"]
+
+    errors: list[str] = []
+    unknown = sorted(set(exception) - METADATA_EXCEPTION_KEYS)
+    if unknown:
+        errors.append(f"{prefix} has unknown keys: {', '.join(unknown)}")
+
+    raw_doi = entry.get("doi")
+    if not isinstance(raw_doi, str) or not raw_doi.strip():
+        errors.append(f"{prefix} only applies to entries with a DOI")
+
+    fields = exception.get("fields")
+    if not isinstance(fields, list) or not fields or not all(
+        isinstance(field, str) for field in fields
+    ):
+        errors.append(f"{prefix}.fields must be a non-empty list of field names")
+    else:
+        rejected = sorted(set(fields) - EXCEPTABLE_FIELDS)
+        if rejected:
+            errors.append(
+                f"{prefix}.fields may only name {', '.join(sorted(EXCEPTABLE_FIELDS))}; "
+                f"'{', '.join(rejected)}' cannot be excepted"
+            )
+
+    reason = exception.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        errors.append(f"{prefix}.reason must say why the agency record is wrong")
+
+    evidence = exception.get("evidence")
+    if not isinstance(evidence, str) or not evidence.strip():
+        errors.append(f"{prefix}.evidence must be a non-empty string")
+        return errors
+
+    evidence = evidence.strip()
+    is_url = evidence.lower().startswith(("http://", "https://"))
+    local_file = entry.get("local_file")
+    if local_file is not None:
+        # A local copy exists, so the evidence must be a page of that very file.
+        match = EVIDENCE_PAGE_RE.match(evidence)
+        if is_url or match is None:
+            errors.append(
+                f"{prefix}.evidence must be '<path inside the repository>#page=<N>' "
+                "when the entry has a local_file"
+            )
+            return errors
+        evidence_path = match.group("path")
+        root_path = root.resolve()
+        file_path = (root_path / evidence_path).resolve()
+        try:
+            file_path.relative_to(root_path)
+        except ValueError:
+            errors.append(f"{prefix}.evidence must stay inside {root_path}")
+            return errors
+        if not isinstance(local_file, str) or not local_file.strip():
+            errors.append(f"{prefix}.evidence cannot be checked because local_file is invalid")
+            return errors
+        local_path = (root_path / local_file).resolve()
+        # Reject padded paths outright: Windows drops trailing spaces when resolving,
+        # which would let 'a.pdf #page=1' pass as 'a.pdf'.
+        if evidence_path != evidence_path.strip() or os.path.normcase(
+            str(file_path)
+        ) != os.path.normcase(str(local_path)):
+            errors.append(f"{prefix}.evidence must point at this entry's local_file")
+            return errors
+        if not file_path.is_file():
+            errors.append(f"{prefix}.evidence file '{evidence_path}' does not exist")
+    else:
+        # No local copy: point at the authoritative record (publisher, OSTI, ...).
+        parsed = urlparse(evidence)
+        host = (parsed.hostname or "").lower()
+        if not is_url or not host:
+            errors.append(
+                f"{prefix}.evidence must be an http(s) URL of the authoritative record "
+                "when the entry has no local_file"
+            )
+        elif any(host == agency or host.endswith("." + agency) for agency in AGENCY_EVIDENCE_HOSTS):
+            errors.append(
+                f"{prefix}.evidence must not be an agency or DOI-resolver URL ({host}); "
+                "cite the authoritative landing page instead"
+            )
+    return errors
+
+
 def validate_bibliographic_fields(label: str, entry: dict, source_type: object) -> list[str]:
     errors: list[str] = []
 
@@ -361,6 +544,12 @@ def validate_bibliographic_fields(label: str, entry: dict, source_type: object) 
     ):
         errors.append(f"{label}: venue must be a non-empty string")
 
+    for field in LOCATOR_FIELDS:
+        if field in entry and (
+            not isinstance(entry[field], str) or not entry[field].strip()
+        ):
+            errors.append(f"{label}: {field} must be a non-empty string when present")
+
     return errors
 
 
@@ -373,7 +562,10 @@ def validate_registry(
     fetch_siblings: Callable[[str], list[dict]] | None = None,
     today: date | None = None,
     root: Path | None = None,
+    warnings: list[str] | None = None,
 ) -> list[str]:
+    """Return validation errors. Warnings (metadata exceptions in use) go to the
+    ``warnings`` list when one is given, otherwise straight to stderr."""
     try:
         data = json.loads(registry_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -390,6 +582,11 @@ def validate_registry(
     siblings = fetch_siblings or fetch_title_siblings
     current_day = today or date.today()
     base_dir = root if root is not None else Path(".")
+    if warnings is not None:
+        warn = warnings.append
+    else:
+        def warn(message: str) -> None:
+            print(f"WARNING: {message}", file=sys.stderr)
 
     for index, entry in enumerate(data):
         label = f"entry {index}"
@@ -428,6 +625,14 @@ def validate_registry(
 
         errors.extend(validate_access(label, entry, base_dir))
         errors.extend(validate_bibliographic_fields(label, entry, source_type))
+        exception_errors = validate_metadata_exception(label, entry, base_dir)
+        errors.extend(exception_errors)
+        # A malformed exception excuses nothing.
+        excepted_fields = (
+            set(entry["metadata_exception"]["fields"])
+            if "metadata_exception" in entry and not exception_errors
+            else set()
+        )
 
         raw_doi = entry.get("doi")
         doi = normalize_doi(raw_doi) if isinstance(raw_doi, str) else ""
@@ -451,7 +656,12 @@ def validate_registry(
             continue
 
         errors.extend(_check_metadata(label, title, doi, metadata, agency))
-        errors.extend(_check_bibliographic_metadata(label, entry, metadata, agency))
+        errors.extend(
+            _check_bibliographic_metadata(label, entry, metadata, agency, excepted_fields, warn)
+        )
+        # DataCite records (arXiv, Zenodo) carry no volume, issue, or pages.
+        if agency == "Crossref":
+            errors.extend(_check_locator_metadata(label, entry, metadata, agency))
 
         try:
             notices = updates(doi)
@@ -511,7 +721,10 @@ def main() -> int:
             "fetch_datacite": lambda doi: fetch_datacite_metadata(doi, args.mailto),
             "fetch_updates": lambda doi: fetch_update_notices(doi, args.mailto),
         }
-    errors = validate_registry(args.registry, online=args.online, **kwargs)
+    warnings: list[str] = []
+    errors = validate_registry(args.registry, online=args.online, warnings=warnings, **kwargs)
+    for warning in warnings:
+        print(f"WARNING: {warning}")
     if not errors:
         mode = "including DOI resolution and retraction screening" if args.online else "structurally"
         print(f"Source registry verified {mode}.")

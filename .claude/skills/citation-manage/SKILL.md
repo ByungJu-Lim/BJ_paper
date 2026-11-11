@@ -22,7 +22,7 @@ Narrative `@key`, bracketed `[@key]`, and suppressed-author `-@key` citations ar
 
 ## Procedure
 
-1. Validate the registry first. Online verification is mandatory for every entry carrying a DOI — it resolves the DOI, matches the title, full ordered author names, year, and venue, and screens the work for retractions:
+1. Validate the registry first. Online verification is mandatory for every entry carrying a DOI — it resolves the DOI, matches the title, full ordered author names, year, and venue, and screens the work for retractions. Re-run it only when `docs/notes/retrieved-sources.json` or `refs/references.bib` changed since the last recorded pass, or when that pass is more than 30 days old at a submission freeze; otherwise cite the last pass (commit and date) instead (CLAUDE.md, user rule 2026-11-04).
    ```bash
    python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online
    ```

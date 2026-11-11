@@ -105,6 +105,8 @@ def build_repo(root: Path) -> None:
     )
     (root / "docs/notes/pipeline-findings.md").write_text("# findings\n", encoding="utf-8")
     (root / "docs/notes/fouling-topic-note.md").write_text("# topic note\n", encoding="utf-8")
+    (root / "docs/notes/scientific-writing-rules.md").write_text(
+        "# Scientific Writing Rules\n", encoding="utf-8")
     (root / "docs/sections/04-results.md").write_text(
         "# Results\n\n<!-- claims: C1 -->\n\nThe hybrid won.\n", encoding="utf-8")
     (root / "docs/sources/prev2024source.pdf").write_bytes(b"%PDF-1.4")
@@ -242,6 +244,11 @@ class TestConfirmedReset(ResetPaperTestCase):
     def test_findings_are_dropped_by_default(self):
         root, _ = self.reset()
         self.assertFalse((root / "docs/notes/pipeline-findings.md").exists())
+
+    def test_writing_rules_survive_as_a_standing_rule(self):
+        """The scientific writing rules bind every paper, not just the previous one."""
+        root, _ = self.reset()
+        self.assertTrue((root / "docs/notes/scientific-writing-rules.md").exists())
 
     def test_reset_is_idempotent(self):
         root, _ = self.reset()

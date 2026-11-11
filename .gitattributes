@@ -21,3 +21,9 @@
 *.zip   binary
 *.xlsx  binary
 *.docx  binary
+
+# Frozen study artifacts are byte-hashed evidence: rerun_manifest.py compares
+# SHA-256 digests, so a clone that renormalises their newlines breaks the record.
+# When a run is frozen as evidence, exempt exactly its files from normalisation:
+#   data/processed/<run-id>.manifest.json -text
+#   data/processed/<run-id>/** -text

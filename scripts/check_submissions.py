@@ -42,11 +42,16 @@ REVISION_STATUSES = {"minor-revision", "major-revision"}
 # The attempt is over without acceptance.
 CLOSED_NEGATIVE_STATUSES = {"rejected", "desk-rejected", "withdrawn"}
 ACCEPTED_STATUS = "accepted"
+# Closed while still preparing: the manuscript never reached this venue.
+ABANDONED_STATUS = "abandoned"
 ALLOWED_STATUSES = (
-    PREPARING_STATUSES | ACTIVE_STATUSES | CLOSED_NEGATIVE_STATUSES | {ACCEPTED_STATUS}
+    PREPARING_STATUSES
+    | ACTIVE_STATUSES
+    | CLOSED_NEGATIVE_STATUSES
+    | {ACCEPTED_STATUS, ABANDONED_STATUS}
 )
 # Statuses meaning the manuscript actually reached the venue.
-SUBMITTED_STATUSES = ALLOWED_STATUSES - PREPARING_STATUSES
+SUBMITTED_STATUSES = ALLOWED_STATUSES - PREPARING_STATUSES - {ABANDONED_STATUS}
 DECISION_STATUSES = REVISION_STATUSES | CLOSED_NEGATIVE_STATUSES | {ACCEPTED_STATUS}
 BOOLEAN_VALUES = {"yes", "no"}
 
@@ -167,7 +172,16 @@ def validate_attempt(attempt: dict, today: date | None = None) -> list[str]:
                 f"'submission/{attempt_id}/v1'"
             )
     elif submitted_on:
-        errors.append(f"{attempt_id}: status 'preparing' must not have submitted-on")
+        errors.append(f"{attempt_id}: status '{status}' must not have submitted-on")
+
+    if status == ABANDONED_STATUS:
+        if manuscript_tag:
+            errors.append(f"{attempt_id}: status 'abandoned' must not have manuscript-tag")
+        if not attempt["no-feedback-reason"]:
+            errors.append(
+                f"{attempt_id}: status 'abandoned' requires no-feedback-reason "
+                "stating why it was never submitted"
+            )
 
     submitted_day = _parse_day(submitted_on)
     if submitted_on and submitted_day is None:

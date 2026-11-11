@@ -64,7 +64,8 @@ description: Designs the paper's own section shape from the story brief and the 
    → `results`), each `not-started, round 0/3, verdict none`. A story with
    two Related Work strands gets two artifacts here, not one.
 5. Draft each `front-matter` section one at a time, in the table's order.
-   For each artifact, delegate to `writer`, create the file at the exact
+   For each artifact, delegate to `writer` with `docs/notes/scientific-writing-rules.md`
+   (user rule 2026-11-05; Introduction and Methods rules in its section 7), create the file at the exact
    basename the Sections table names, leave every `concluding` section as a
    scaffold, review with `critic`, then stop for that section's
    **section-draft-complete user gate**. Record every attempt in that

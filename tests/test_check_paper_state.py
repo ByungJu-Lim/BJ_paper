@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from scripts.check_paper_state import (open_preconditions, parse_stages, validate_all,
                                        validate_outline_artifacts, validate_preconditions,
                                        validate_stage)
-from tests.state_fixture import build_state
+from tests.state_fixture import absent_outline, build_state
 
 
 def write_state(tmp_dir: str, content: str) -> Path:
@@ -290,7 +290,7 @@ class TestValidateAll(unittest.TestCase):
                 "last-critic-issues:\nverified-sources: 0\nrejected-citations:\n\n"
                 "## Stage: polish-review\nstatus: not-started\nround: 0/3\nlast-critic-verdict:\nlast-critic-issues:\n",
             )
-            report = validate_all(state_path)
+            report = validate_all(state_path, absent_outline(state_path))
             self.assertEqual(list(report.keys()), ["novelty-check"])
 
     def test_missing_duplicate_and_out_of_order_stages_are_flagged(self):
@@ -304,7 +304,7 @@ class TestValidateAll(unittest.TestCase):
                 "## Stage: lit-review\nstatus: not-started\nround: 0/3\n"
                 "last-critic-verdict:\nlast-critic-issues:\n",
             )
-            errors = validate_all(state_path)["__workflow__"]
+            errors = validate_all(state_path, absent_outline(state_path))["__workflow__"]
             self.assertTrue(any("duplicate" in error for error in errors))
             self.assertTrue(any("missing" in error for error in errors))
             self.assertTrue(any("order" in error for error in errors))
@@ -323,7 +323,7 @@ class TestValidateAll(unittest.TestCase):
                     }
                 ),
             )
-            errors = validate_all(state_path)["story-brief"]
+            errors = validate_all(state_path, absent_outline(state_path))["story-brief"]
             self.assertTrue(any("round is required" in error for error in errors))
             self.assertTrue(any("requires last-critic-verdict 'pass'" in error for error in errors))
 
@@ -341,7 +341,7 @@ class TestValidateAll(unittest.TestCase):
                     }
                 ),
             )
-            errors = validate_all(state_path)["story-brief"]
+            errors = validate_all(state_path, absent_outline(state_path))["story-brief"]
             self.assertTrue(any("requires last-critic-verdict 'pass'" in error for error in errors))
             self.assertTrue(any("reached without status 'escalated'" in error for error in errors))
 
@@ -364,7 +364,7 @@ class TestValidateAll(unittest.TestCase):
                     }
                 ),
             )
-            errors = validate_all(state_path)["lit-review"]
+            errors = validate_all(state_path, absent_outline(state_path))["lit-review"]
             self.assertTrue(any("requires approved prerequisites: story-brief" in error for error in errors))
 
     def test_results_and_figures_depend_on_code_experiment(self):
@@ -406,7 +406,7 @@ class TestValidateAll(unittest.TestCase):
                     }
                 ),
             )
-            report = validate_all(state_path)
+            report = validate_all(state_path, absent_outline(state_path))
             self.assertTrue(
                 any("requires approved prerequisites: code-experiment" in error for error in report["results-discussion"])
             )
@@ -426,7 +426,7 @@ class TestValidateAll(unittest.TestCase):
                 "last-critic-issues:\n",
             )
             self.assertTrue(
-                any("duplicate scalar field 'status'" in error for error in validate_all(state_path)["story-brief"])
+                any("duplicate scalar field 'status'" in error for error in validate_all(state_path, absent_outline(state_path))["story-brief"])
             )
 
 
@@ -593,7 +593,7 @@ class TestPreconditions(unittest.TestCase):
 
     def validate(self, tmp_dir: str, **kwargs) -> dict:
         path = write_state(tmp_dir, build_state(**kwargs))
-        return validate_all(path)
+        return validate_all(path, absent_outline(path))
 
     def test_an_open_precondition_blocks_approval(self):
         with TemporaryDirectory() as tmp:

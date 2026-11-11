@@ -18,7 +18,10 @@ class TestCitationWorkflow(unittest.TestCase):
                                '--registry', str(directory / 'sources.json'),
                                '--sections', str(directory / '*.md'),
                                '--bib', str(directory / 'references.bib'), *extra],
-                              cwd=ROOT, capture_output=True, text=True)
+                              # cwd is the fixture, not the repo: the validator reads
+                              # docs/outline.md relative to cwd, and the live outline
+                              # must not decide which workflow ledger is valid here.
+                              cwd=directory, capture_output=True, text=True)
 
     def fixture(self, directory: Path):
         entry = {'key': 'real2024', 'title': 'Measured Results', 'authors': ['Jane Doe'],
