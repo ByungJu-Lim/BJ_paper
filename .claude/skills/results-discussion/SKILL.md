@@ -16,6 +16,10 @@ description: Analyzes processed experiment data and drafts the Results and Discu
 2. Delegate to `scientist`: analyze the contents of `data/processed/` (statistics, trends, anomalies relevant to the paper's claims).
    Both `writer` delegations below follow `docs/notes/scientific-writing-rules.md`
    (user rule 2026-11-05; Results, Discussion and Conclusions rules in its section 7).
+   These sections are where drafts get longest: state each operating condition
+   once (Methods or a table) and refer to it by name, and do not restate a
+   Results number in Discussion or Conclusions. Each writer returns only after
+   `python scripts/check_prose.py --sections <files>` passes.
 3. Delegate to `writer`: draft the `concluding` section(s) that carry the
    `Finding` slot (by default `docs/sections/04-results.md`) as an objective
    report of what the data shows — no interpretation here.
@@ -55,7 +59,7 @@ produced.
 | The interval reported is named (SD, SE, CI, IQR) and its repetition count stated | An unnamed ± is uninterpretable |
 | Every comparison the design ran appears, including the ones that went the wrong way | Selective reporting, which is what makes the surviving p-value meaningless |
 | A `refuted` claim is reported as a negative result in its own right, not quietly dropped or restated more weakly | Rewriting the hypothesis around the answer |
-| No claim still `assumed` is stated in the indicative in Results, Discussion, or Conclusion | The validator catches the declaration; only a reader catches the sentence |
+| No claim still `assumed` is stated in the indicative in a `concluding` section (by default Results, Discussion, or Conclusion) | The validator catches the declaration; only a reader catches the sentence |
 | Discussion separates what was measured from what it implies, and marks which is which | Implication presented as finding |
 | Limitations name the design choices that bound the claim (simulation vs. measured data, split rule, seed count), not generic caveats | "More work is needed" is not a limitation |
 | The Conclusion claims no more than the Results section established | Where papers most often overreach |

@@ -65,7 +65,9 @@ description: Designs the paper's own section shape from the story brief and the 
    two Related Work strands gets two artifacts here, not one.
 5. Draft each `front-matter` section one at a time, in the table's order.
    For each artifact, delegate to `writer` with `docs/notes/scientific-writing-rules.md`
-   (user rule 2026-11-05; Introduction and Methods rules in its section 7), create the file at the exact
+   (user rule 2026-11-05; Introduction and Methods rules in its section 7; hard limits in its section 2),
+   have the writer run the section 10 compression pass until
+   `python scripts/check_prose.py --sections <file>` passes, create the file at the exact
    basename the Sections table names, leave every `concluding` section as a
    scaffold, review with `critic`, then stop for that section's
    **section-draft-complete user gate**. Record every attempt in that

@@ -25,7 +25,7 @@ searching for confirmation and `results-discussion` into bending numbers to fit.
 Three mechanisms enforce it:
 
 - Every claim carries a `status`. An `assumed` claim may not be stated as fact
-  in Results, Discussion, or Conclusion.
+  in a `concluding` section (by default Results, Discussion, or Conclusion).
 - Every claim carries a **falsifier**, written before the experiment: what result
   would force it to be rewritten.
 - Every claim carries **evidence** that must resolve — a registered source key, a
@@ -40,7 +40,7 @@ Three mechanisms enforce it:
    represent honestly, not a shortcut to hide. Existing evidence changes what
    the brief can say immediately (see "Basis" below); it does not exempt any
    claim from a falsifier or from evidence that resolves.
-2. Delegate to `writer` (with `analyst` where the framing is unclear): fill the
+2. Delegate to `writer` (with `scientist` where the framing is unclear): fill the
    `Context`, `Gap`, and `Question` slots of `docs/notes/story-brief.md`. One
    sentence each. `Approach`, `Finding`, and `Implication` may be filled now if
    step 1 found existing code, data, or results that already answer them —

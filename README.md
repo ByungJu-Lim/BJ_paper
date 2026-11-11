@@ -60,6 +60,7 @@ python scripts/check_submissions.py --log submissions/submission-log.md
 python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json
 python scripts/verify_source_registry.py --registry docs/notes/retrieved-sources.json --online --mailto you@example.com
 python scripts/verify_citations.py --registry docs/notes/retrieved-sources.json --sections "docs/sections/*.md" --bib refs/references.bib
+python scripts/check_prose.py --sections "docs/sections/*.md"
 python scripts/rerun_manifest.py --all
 ```
 
@@ -68,6 +69,7 @@ python scripts/rerun_manifest.py --all
 - `check_paper_state.py`는 단계 누락·중복·의존 관계, 필수 검토 횟수, 승인 시 pass 판정을 확인합니다. `code-experiment` 승인 후 결과·그림 단계를 수행하고 둘 다 승인되면 인용 단계로 진행합니다.
 - `verify_story_brief.py`는 작성된 주장의 반증 조건, 섹션별 주장 선언, 근거의 실제 파일 연결을 검사합니다. `--state`는 단계 승인에 따라 검증 수준을 높이며 최종 승인에서는 전체 슬롯·섹션 검사를 적용합니다. 실험 후에는 `--check-manifests`, 최종 검토에는 `--require-slots all --require-coverage`를 명시해서 실행할 수도 있습니다.
 - `rerun_manifest.py`는 `data/processed/<run-id>.manifest.json`에 기록된 명령을 실제로 재실행하고, 다시 만들어진 산출물을 커밋된 것과 바이트 단위로 비교합니다. `verify_story_brief.py --check-manifests`가 매니페스트의 형식과 파일 존재만 확인하는 것과 달리, 이쪽이 결과가 재현되는지를 답합니다. 원본은 재실행 전에 임시 위치로 옮겨두었다가 되돌리므로 이미 인용된 결과를 덮어쓰지 않습니다. 매니페스트에 `nondeterminism`을 적어두면 차이가 실패가 아니라 선언된 편차로 보고되지만, 차이 자체는 그대로 출력됩니다. 선언하지 않은 파일을 `data/processed/`에 쓰는 실행도 실패로 처리합니다 — 어떤 매니페스트도 가리키지 않는 결과 파일은 추적할 수 없기 때문입니다. 그림·표처럼 `data/processed/` 밖에 쓰는 산출물은 매니페스트의 `renders`(경로 → SHA-256)에 기록할 수 있으며, 재실행 후 바이트가 달라지면 실패가 아니라 경고로 보고합니다(래스터 글자는 matplotlib·FreeType 빌드에 따라 달라지고, 재현성 주장은 데이터 산출물에 근거하기 때문). 의존성에 `python`·`freetype`을 기록하면 각각 인터프리터와 matplotlib의 FreeType 버전과 대조합니다.
+- `check_prose.py`는 원고의 장황함을 기계적으로 걸러냅니다. 35단어를 넘는 문장, 파일별 평균 22단어 초과, 180단어를 넘는 문단, 콜론·세미콜론 연쇄, 문장 안 (a)(b)(c) 나열, 금지 상투어를 오류로 보고합니다. 표·수식·캡션·제목·주석은 검사하지 않고, `<!-- prose-ok: 사유 -->` 다음 문단은 길이·평균 검사에서 빠지되 사유가 출력됩니다. CI의 `--state` 모드는 리뷰에 들어간 섹션만 검사해 초안 단계의 중간 커밋을 허용합니다. 옵션 없이 실행하면 모든 파일을 검사합니다. 다른 두 본문 검증기와 달리 패턴에 맞는 파일이 없으면 통과합니다(원고가 없는 템플릿 상태). 한글이 주로 쓰인 파일은 국문 기준이 정해질 때까지 NOTE만 출력하고 건너뜁니다.
 - `check_submissions.py`는 투고 이력과 투고처 폴더를 검사합니다. 두 저널에 동시 투고된 상태, 심사평을 반영하지 않고 연 다음 투고, 게재 확정 이후의 추가 투고, 어긋난 날짜를 잡아냅니다. 또한 투고처별 `figure-profile.json`(형식·해상도·컬럼 폭)을 검증하고, `main_figures`에 적힌 그림이 선언한 형식으로 실제 존재하는지 확인합니다 — 저널을 옮기며 그림을 다시 렌더링하지 않은 경우가 여기서 걸립니다.
 
 두 본문 검증기는 따옴표로 전달한 파일 패턴을 내부에서 확장하므로 PowerShell과 Bash에서 같은 명령을 사용합니다. 일치하는 파일이 없으면 실패합니다. CI는 Windows와 Ubuntu, Python 3.11과 3.14에서 실행합니다.

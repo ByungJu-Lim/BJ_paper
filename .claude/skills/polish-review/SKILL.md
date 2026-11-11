@@ -33,6 +33,10 @@ terminology consistency across sections; compliance with `docs/notes/scientific-
    ```bash
    python scripts/verify_story_brief.py --require-slots all --require-coverage --check-manifests --sections "docs/sections/*.md" --registry docs/notes/retrieved-sources.json
    ```
-4. Produce a short review report listing any remaining issues per section.
-5. Stop for the **final-polish user gate** — do not mark the paper complete without explicit user sign-off.
-6. Once approved, hand off to `submission-manage`. "Done drafting" is not "published": the paper still has to reach a venue, and a rejection routes specific sections back through the stages above.
+4. Run the prose gate on the whole manuscript, including the abstract and supplementary text. Any violation reopens the section for a wording-only revision:
+   ```bash
+   python scripts/check_prose.py --sections "docs/sections/*.md"
+   ```
+5. Produce a short review report listing any remaining issues per section.
+6. Stop for the **final-polish user gate** — do not mark the paper complete without explicit user sign-off.
+7. Once approved, hand off to `submission-manage`. "Done drafting" is not "published": the paper still has to reach a venue, and a rejection routes specific sections back through the stages above.

@@ -27,7 +27,7 @@ sharp enough.
 Every load-bearing statement the paper makes, with what currently backs it.
 
 - `assumed` — believed but not yet backed. **May not be stated as fact in
-  Results, Discussion, or Conclusion.**
+  a `concluding` section (by default Results, Discussion, or Conclusion).**
 - `supported` — backed by the listed evidence.
 - `refuted` — the evidence went the other way. Rewrite the narrative slot that
   depended on it; the claim stays here as a record.

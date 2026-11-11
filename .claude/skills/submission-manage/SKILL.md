@@ -43,7 +43,7 @@ submission tag to a new commit.
    interesting (not all of them), with the minimum of method and numbers, each as a lesson in a sentence or two, add only what the venue requires
    (e.g. a one-sentence length justification), and leave out what the manuscript or submission
    system already carries (CLAUDE.md, cover-letter rule, user 2026-11-04). If this is a resubmission, the letter must not
-   mention the earlier venue or its decision.
+   mention the earlier venue or its decision. The letter must pass `python scripts/check_prose.py --sections submissions/NN-<slug>/cover-letter.md`.
 6. Add an attempt block to the ledger with `status: preparing`.
 
 ## Submitting
